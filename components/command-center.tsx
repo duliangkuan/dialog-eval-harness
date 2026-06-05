@@ -32,6 +32,15 @@ const defaultCase = {
   seed: 7
 };
 
+const defaultConstraints = [
+  { rule_id: "R01", desc: "拨通后先核实是否本人", category: "必做项+顺序", severity: 3, verifier: "rule_based" },
+  { rule_id: "R02", desc: "超时超过 15 分钟时询问原因并记录工单", category: "条件分支", severity: 4, verifier: "hybrid" },
+  { rule_id: "R03", desc: "不能承诺赔付", category: "禁做项", severity: 5, verifier: "hybrid", veto: true },
+  { rule_id: "R04", desc: "对方情绪激动时转人工", category: "触发终止", severity: 5, verifier: "llm_judge" },
+  { rule_id: "R05", desc: "通话不超过 90 秒", category: "时长上限", severity: 2, verifier: "rule_based" },
+  { rule_id: "R06", desc: "结束前必须复述预计送达时间", category: "结束前必做", severity: 3, verifier: "rule_based" }
+] as const;
+
 type ApiState = {
   status: "idle" | "loading" | "success" | "error";
   data?: unknown;
@@ -73,7 +82,8 @@ export function CommandCenter() {
         },
         body: JSON.stringify({
           policy,
-          caseInput: parsedCase.value
+          caseInput: parsedCase.value,
+          constraints: policy.trim() === defaultPolicy ? defaultConstraints : undefined
         })
       });
 

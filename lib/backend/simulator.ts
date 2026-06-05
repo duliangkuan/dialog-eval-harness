@@ -17,6 +17,23 @@ export async function simulateUserTurn(input: {
   const { caseInput, transcript } = input;
   const nextTurnId = transcript.length + 1;
 
+  if (process.env.SCRIPTED_DIALOGUE === "true") {
+    return {
+      requestId: `scripted_user_${Date.now()}`,
+      turn: {
+        turn_id: nextTurnId,
+        speaker: "user",
+        text: scriptedUserText(caseInput.persona, transcript.length),
+        meta: {
+          emotion: caseInput.persona === "hostile" ? "impatient" : "neutral",
+          behavior: caseInput.persona === "conflict" ? "contradiction" : "goal_answer",
+          persona: caseInput.persona,
+          provider: "scripted"
+        }
+      }
+    };
+  }
+
   const result = await callModel(
     [
       {
@@ -70,4 +87,20 @@ Now simulate the next user utterance. Return:
       }
     }
   };
+}
+
+function scriptedUserText(persona: PersonaId, turnCount: number) {
+  if (persona === "hostile") {
+    return turnCount > 2 ? "你们别一直问，我要投诉了。" : "是我，都超时了你们到底送不送？";
+  }
+  if (persona === "conflict") {
+    return turnCount > 2 ? "我刚才说错了，是 T3，不是 T2。" : "对，我在 T2。";
+  }
+  if (persona === "low_comprehension") {
+    return "啊？什么意思，你再说一遍。";
+  }
+  if (persona === "tangent") {
+    return "你们平台派单也太不公平了。";
+  }
+  return "是我，快点说，我在路上。";
 }

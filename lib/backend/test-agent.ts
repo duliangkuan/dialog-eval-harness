@@ -11,6 +11,17 @@ export async function runTestAgentTurn(input: {
   const external = await callExternalAgentIfConfigured(input, nextTurnId);
   if (external) return external;
 
+  if (process.env.SCRIPTED_DIALOGUE === "true") {
+    return {
+      requestId: `scripted_agent_${Date.now()}`,
+      turn: {
+        turn_id: nextTurnId,
+        speaker: "agent",
+        text: scriptedAgentText(input.transcript.length, input.repairHints)
+      }
+    };
+  }
+
   const result = await callModel(
     [
       {
@@ -47,6 +58,20 @@ Write only the next agent utterance text.`
       text: result.content.replace(/^"|"$/g, "").trim()
     }
   };
+}
+
+function scriptedAgentText(turnCount: number, repairHints?: string[]) {
+  const hasRepair = Boolean(repairHints?.length);
+  if (turnCount === 0) {
+    return "您好，请问是订单尾号 7163 的骑手本人吗？";
+  }
+  if (hasRepair) {
+    return "我理解您着急，这里不能承诺赔付。我先记录超时原因并为您转人工，预计 18:42 送达。";
+  }
+  if (turnCount <= 2) {
+    return "系统显示已超时 21 分钟，请问具体原因是什么？";
+  }
+  return "我先记录原因，预计 18:42 送达，感谢接听。";
 }
 
 async function callExternalAgentIfConfigured(

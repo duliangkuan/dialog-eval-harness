@@ -21,6 +21,10 @@ export async function GET() {
       mode: process.env.TEST_AGENT_ENDPOINT ? "external_webhook" : "model_adapter",
       hasEndpoint: Boolean(process.env.TEST_AGENT_ENDPOINT),
       hasApiKey: Boolean(process.env.TEST_AGENT_API_KEY)
+    },
+    runtime: {
+      scriptedDialogue: process.env.SCRIPTED_DIALOGUE === "true",
+      modelTimeoutMs: process.env.MODEL_TIMEOUT_MS ?? "45000"
     }
   });
 }
