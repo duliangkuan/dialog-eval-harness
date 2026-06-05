@@ -270,16 +270,18 @@ async function advanceDialogue(input: {
   const transcript = [...input.transcript];
   const requestIds = [...input.requestIds];
 
-  const agent = await runTestAgentTurn({
-    policy: input.policy,
-    caseInput: input.caseInput,
-    transcript,
-    repairHints: input.repairHints
-  });
-  transcript.push(agent.turn);
-  requestIds.push(agent.requestId);
+  const nextSpeaker = transcript.length % 2 === 0 ? "agent" : "user";
 
-  if (!isDialogueComplete(transcript, input.caseInput.max_turns)) {
+  if (nextSpeaker === "agent") {
+    const agent = await runTestAgentTurn({
+      policy: input.policy,
+      caseInput: input.caseInput,
+      transcript,
+      repairHints: input.repairHints
+    });
+    transcript.push(agent.turn);
+    requestIds.push(agent.requestId);
+  } else {
     const user = await input.simulateUserTurn(transcript);
     transcript.push(user.turn);
     requestIds.push(user.requestId);
