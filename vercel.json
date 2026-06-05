@@ -1,5 +1,6 @@
 {
   "framework": "nextjs",
+  "regions": ["hkg1"],
   "functions": {
     "app/api/harness/run/route.ts": {
       "maxDuration": 300

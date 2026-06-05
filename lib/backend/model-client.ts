@@ -55,21 +55,46 @@ export async function callModel(
     );
   }
 
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages,
-      temperature: options.temperature ?? 0.1,
-      max_tokens: options.maxTokens ?? 1800,
-      response_format:
-        options.responseFormat === "json_object" ? { type: "json_object" } : undefined
-    })
+  const body = JSON.stringify({
+    model: config.model,
+    messages,
+    temperature: options.temperature ?? 0.1,
+    max_tokens: options.maxTokens ?? 1800,
+    response_format:
+      options.responseFormat === "json_object" ? { type: "json_object" } : undefined
   });
+
+  let response: Response | null = null;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Number(process.env.MODEL_TIMEOUT_MS ?? 45000));
+
+    try {
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          Authorization: `Bearer ${config.apiKey}`
+        },
+        body,
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      break;
+    } catch (error) {
+      clearTimeout(timeout);
+      lastError = error;
+      if (attempt === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
+    }
+  }
+
+  if (!response) {
+    throw new Error(`Model request failed before response: ${lastError instanceof Error ? lastError.message : "unknown network error"}.`);
+  }
 
   const requestId = response.headers.get("x-request-id") ?? `req_${Date.now()}`;
   const payload = (await response.json()) as OpenAICompatibleResponse;
