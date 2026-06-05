@@ -94,8 +94,10 @@ export function CommandCenter() {
         const advanceResponse = await fetch(`/api/runs/${run.id}/advance`, {
           method: "POST",
           headers: {
+            "Content-Type": "application/json; charset=utf-8",
             ...(apiKey ? { "x-api-key": apiKey } : {})
-          }
+          },
+          body: JSON.stringify({ run })
         });
 
         run = await advanceResponse.json();

@@ -80,6 +80,11 @@ export function getRun(runId: string) {
   return store().get(runId) ?? null;
 }
 
+export function saveRun(run: RunRecord) {
+  store().set(run.id, run);
+  return run;
+}
+
 export function listRuns() {
   return [...store().values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50);
 }

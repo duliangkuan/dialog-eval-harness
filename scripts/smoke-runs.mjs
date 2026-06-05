@@ -40,7 +40,8 @@ if (!response.ok) {
 for (let i = 0; i < 8 && run.status !== "done" && run.status !== "failed"; i += 1) {
   response = await fetch(`${baseUrl}/api/runs/${run.id}/advance`, {
     method: "POST",
-    headers: apiKey ? { "x-api-key": apiKey } : {}
+    headers,
+    body: JSON.stringify({ run })
   });
   run = await response.json();
   console.log(`${run.id} ${run.stage} ${run.progress}%`);
