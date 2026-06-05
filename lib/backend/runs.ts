@@ -2,7 +2,7 @@ import { extractConstraints } from "./constraints";
 import { evaluateDialogue } from "./evaluator";
 import { diffReports } from "./harness";
 import { simulateUserTurn } from "./simulator";
-import { runDialogue } from "./test-agent";
+import { runTestAgentTurn } from "./test-agent";
 import { CaseInput, Constraint, DialogueTurn, EvalReport, HarnessResult } from "./types";
 
 export type RunStage =
@@ -121,9 +121,11 @@ export async function advanceRun(runId: string): Promise<RunRecord> {
       }
 
       case "simulating_round1": {
-        const dialogue = await runDialogue({
+        const dialogue = await advanceDialogue({
           policy: run.input.policy,
           caseInput: run.input.caseInput,
+          transcript: run.artifacts.round1Transcript ?? [],
+          requestIds: run.artifacts.round1RequestIds ?? [],
           simulateUserTurn: (transcript) =>
             simulateUserTurn({
               caseInput: run.input.caseInput,
@@ -132,8 +134,12 @@ export async function advanceRun(runId: string): Promise<RunRecord> {
         });
         run.artifacts.round1Transcript = dialogue.transcript;
         run.artifacts.round1RequestIds = dialogue.requestIds;
-        run.stage = "evaluating_round1";
-        run.progress = 45;
+        if (isDialogueComplete(run.artifacts.round1Transcript, run.input.caseInput.max_turns)) {
+          run.stage = "evaluating_round1";
+          run.progress = 45;
+        } else {
+          run.progress = progressForDialogue(run.artifacts.round1Transcript, run.input.caseInput.max_turns, 25, 44);
+        }
         touch(run);
         return run;
       }
@@ -159,12 +165,14 @@ export async function advanceRun(runId: string): Promise<RunRecord> {
       }
 
       case "simulating_round2": {
-        const dialogue = await runDialogue({
+        const dialogue = await advanceDialogue({
           policy: run.input.policy,
           caseInput: {
             ...run.input.caseInput,
             seed: (run.input.caseInput.seed ?? 1) + 1
           },
+          transcript: run.artifacts.round2Transcript ?? [],
+          requestIds: run.artifacts.round2RequestIds ?? [],
           repairHints: run.artifacts.repairHints ?? [],
           simulateUserTurn: (transcript) =>
             simulateUserTurn({
@@ -174,8 +182,12 @@ export async function advanceRun(runId: string): Promise<RunRecord> {
         });
         run.artifacts.round2Transcript = dialogue.transcript;
         run.artifacts.round2RequestIds = dialogue.requestIds;
-        run.stage = "evaluating_round2";
-        run.progress = 82;
+        if (isDialogueComplete(run.artifacts.round2Transcript, run.input.caseInput.max_turns)) {
+          run.stage = "evaluating_round2";
+          run.progress = 82;
+        } else {
+          run.progress = progressForDialogue(run.artifacts.round2Transcript, run.input.caseInput.max_turns, 65, 81);
+        }
         touch(run);
         return run;
       }
@@ -238,6 +250,55 @@ function flattenViolationHints(report: EvalReport) {
       (violation) =>
         `${violation.rule_id} turn ${violation.turn_id}: ${violation.reason} Evidence: ${violation.evidence}`
     );
+}
+
+async function advanceDialogue(input: {
+  policy: string;
+  caseInput: CaseInput;
+  transcript: DialogueTurn[];
+  requestIds: string[];
+  repairHints?: string[];
+  simulateUserTurn: (transcript: DialogueTurn[]) => Promise<{ turn: DialogueTurn; requestId: string }>;
+}) {
+  if (isDialogueComplete(input.transcript, input.caseInput.max_turns)) {
+    return {
+      transcript: input.transcript,
+      requestIds: input.requestIds
+    };
+  }
+
+  const transcript = [...input.transcript];
+  const requestIds = [...input.requestIds];
+
+  const agent = await runTestAgentTurn({
+    policy: input.policy,
+    caseInput: input.caseInput,
+    transcript,
+    repairHints: input.repairHints
+  });
+  transcript.push(agent.turn);
+  requestIds.push(agent.requestId);
+
+  if (!isDialogueComplete(transcript, input.caseInput.max_turns)) {
+    const user = await input.simulateUserTurn(transcript);
+    transcript.push(user.turn);
+    requestIds.push(user.requestId);
+  }
+
+  return {
+    transcript,
+    requestIds
+  };
+}
+
+function isDialogueComplete(transcript: DialogueTurn[], maxTurns = 8) {
+  const lastTurn = transcript.at(-1);
+  return transcript.length >= maxTurns || String(lastTurn?.meta?.emotion) === "hang_up";
+}
+
+function progressForDialogue(transcript: DialogueTurn[], maxTurns = 8, start: number, end: number) {
+  const ratio = Math.min(1, transcript.length / Math.max(1, maxTurns));
+  return Math.round(start + (end - start) * ratio);
 }
 
 function touch(run: RunRecord) {

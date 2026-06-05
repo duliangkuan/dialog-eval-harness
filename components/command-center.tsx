@@ -28,7 +28,7 @@ const defaultCase = {
     eta: "18:42",
     rider_location: "望京 SOHO T3"
   },
-  max_turns: 8,
+  max_turns: 4,
   seed: 7
 };
 
