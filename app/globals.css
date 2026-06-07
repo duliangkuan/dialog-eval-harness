@@ -337,6 +337,24 @@ textarea {
   max-height: 620px;
 }
 
+.traceSummary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.traceFacts {
+  display: grid;
+  gap: 8px;
+  border: 2px solid var(--line);
+  background: var(--paper-2);
+  padding: 12px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 .routeList {
   display: grid;
   gap: 10px;
@@ -427,6 +445,7 @@ textarea {
 
   .statusGrid,
   .resultCards,
+  .traceSummary,
   .vetoGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -448,6 +467,7 @@ textarea {
   nav,
   .statusGrid,
   .resultCards,
+  .traceSummary,
   .vetoGrid {
     grid-template-columns: 1fr;
   }

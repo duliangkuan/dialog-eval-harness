@@ -50,6 +50,14 @@ export type Violation = {
   evidence: string;
   deduction: number | "VETO";
   verifier: VerifierType;
+  judge_votes?: Array<{
+    violated: boolean;
+    turn_id: number | null;
+    confidence: number;
+    reason: string;
+    evidence: string;
+    request_id: string;
+  }>;
 };
 
 export type EvalReport = {

@@ -50,6 +50,36 @@ type ApiState = {
   progress?: number;
 };
 
+type RunPayload = {
+  status?: string;
+  stage?: string;
+  progress?: number;
+  artifacts?: {
+    round1Transcript?: Array<{
+      turn_id: number;
+      speaker: "user" | "agent";
+      text: string;
+      meta?: Record<string, unknown>;
+    }>;
+    round2Transcript?: Array<{
+      turn_id: number;
+      speaker: "user" | "agent";
+      text: string;
+      meta?: Record<string, unknown>;
+    }>;
+    result?: {
+      round1?: { aggregate?: { total_score?: number; pass_status?: string; critical_turn?: number | null; veto_triggered?: string[] } };
+      round2?: { aggregate?: { total_score?: number; pass_status?: string; critical_turn?: number | null; veto_triggered?: string[] } };
+      delta_report?: {
+        fixed_violations?: number;
+        regressed_violations?: number;
+        net_improvement?: number;
+        summary?: string;
+      };
+    };
+  };
+};
+
 export function CommandCenter() {
   const [policy, setPolicy] = useState(defaultPolicy);
   const [caseJson, setCaseJson] = useState(JSON.stringify(defaultCase, null, 2));
@@ -100,7 +130,10 @@ export function CommandCenter() {
         data: run
       });
 
-      for (let step = 0; step < 8 && run.status !== "done" && run.status !== "failed"; step += 1) {
+      const maxTurns = Number(parsedCase.value.max_turns ?? 8);
+      const maxAdvanceSteps = Math.max(20, maxTurns * 2 + 8);
+
+      for (let step = 0; step < maxAdvanceSteps && run.status !== "done" && run.status !== "failed"; step += 1) {
         const advanceResponse = await fetch(`/api/runs/${run.id}/advance`, {
           method: "POST",
           headers: {
@@ -127,6 +160,17 @@ export function CommandCenter() {
         if (run.status === "failed") {
           throw new Error(run.error ?? "Run failed.");
         }
+      }
+
+      if (run.status !== "done" && run.status !== "failed") {
+        setState({
+          status: "error",
+          runId: run.id,
+          stage: run.stage,
+          progress: run.progress,
+          data: run,
+          error: `Run did not finish after ${maxAdvanceSteps} advance steps. Last stage: ${run.stage}.`
+        });
       }
     } catch (error) {
       setState({ status: "error", error: error instanceof Error ? error.message : "Unknown error" });
@@ -201,7 +245,7 @@ export function CommandCenter() {
         </header>
 
         <section className="statusGrid">
-          <Metric icon={<Braces />} label="API" value="5 routes" />
+          <Metric icon={<Braces />} label="API" value="8 routes" />
           <Metric icon={<Shield />} label="Auth" value="x-api-key" />
           <Metric icon={<AlertTriangle />} label="VETO" value="enabled" />
           <Metric icon={<CheckCircle2 />} label="Deploy" value="Vercel" />
@@ -313,6 +357,7 @@ function ApiPanel() {
     ["POST", "/api/constraints/extract", "policy 拆解为 atomic constraints"],
     ["POST", "/api/simulator/run", "生成下一轮用户模拟回复"],
     ["POST", "/api/eval/run", "transcript 生成 per-turn 归因报告"],
+    ["POST", "/api/harness/run", "单请求端到端 R1/R2 Harness Loop"],
     ["POST", "/api/runs", "创建任务式 Harness Run"],
     ["GET", "/api/runs/:runId", "查询 Run 状态与阶段产物"],
     ["POST", "/api/runs/:runId/advance", "推进 Run 的下一个阶段"]
@@ -370,6 +415,13 @@ function VetoPanel() {
 }
 
 function TracePanel({ data }: { data?: unknown }) {
+  const run = data as RunPayload | undefined;
+  const result = run?.artifacts?.result;
+  const latestTranscript = run?.artifacts?.round2Transcript ?? run?.artifacts?.round1Transcript ?? [];
+  const emotionTrail = latestTranscript
+    .filter((turn) => turn.speaker === "user")
+    .map((turn) => String(turn.meta?.emotion ?? "neutral"));
+
   return (
     <section className="singlePanel">
       <div className="panel output">
@@ -378,7 +430,19 @@ function TracePanel({ data }: { data?: unknown }) {
           <span>latest run payload</span>
         </div>
         {data ? (
-          <pre className="jsonBox tall">{JSON.stringify(data, null, 2)}</pre>
+          <>
+            <div className="traceSummary">
+              <ResultCard title="Stage" score={run?.progress} status={run?.stage ?? run?.status} />
+              <ResultCard title="Critical R1" score={result?.round1?.aggregate?.critical_turn ?? undefined} status={result?.round1?.aggregate?.pass_status} />
+              <ResultCard title="Critical R2" score={result?.round2?.aggregate?.critical_turn ?? undefined} status={result?.round2?.aggregate?.pass_status} />
+            </div>
+            <div className="traceFacts">
+              <span>VETO: {(result?.round1?.aggregate?.veto_triggered ?? []).join(", ") || "none"}</span>
+              <span>Emotion: {emotionTrail.join(" -> ") || "none"}</span>
+              <span>Delta: {result?.delta_report?.summary ?? "pending"}</span>
+            </div>
+            <pre className="jsonBox tall">{JSON.stringify(data, null, 2)}</pre>
+          </>
         ) : (
           <div className="empty">还没有 Run 结果。先回到 Harness 面板执行一次任务。</div>
         )}

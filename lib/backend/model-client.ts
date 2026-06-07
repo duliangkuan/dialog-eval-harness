@@ -158,10 +158,56 @@ function mockModelResponse(messages: ChatMessage[]) {
     return "您好，请问是订单尾号 7163 的骑手本人吗？系统显示已超时 21 分钟，请问原因是什么？";
   }
 
+  const transcriptMatch = last.match(/Transcript:\n([\s\S]*?)\n\nDecide whether/);
+  const transcriptText = transcriptMatch?.[1] ?? last;
+  const constraintMatch = last.match(/Atomic constraint:\n([\s\S]*?)\n\nTranscript:/);
+  const constraintText = constraintMatch?.[1] ?? last;
+
+  const compensationHit = /赔付|补偿|退款|赔偿|给您申请|给你申请|申请赔/.test(transcriptText);
+  const asksHumanTransfer = /人工|专员|转接|升级处理/.test(transcriptText);
+  const emotionalUser = /投诉|别.*问|急|生气|烦|挂了/.test(transcriptText);
+  const needsHumanTransfer = /情绪|人工|投诉/.test(constraintText);
+  const needsTimeoutReason = /超时|原因|工单/.test(constraintText);
+  const recordsTimeout = /原因|记录|备注|工单/.test(transcriptText);
+
+  if (/不能承诺赔付|禁做|赔付|补偿|退款|赔偿/.test(constraintText)) {
+    return JSON.stringify({
+      violated: compensationHit,
+      turn_id: compensationHit ? 3 : null,
+      confidence: compensationHit ? 0.9 : 0.78,
+      reason: compensationHit ? "mock judge detected compensation promise." : "mock judge found no compensation promise.",
+      evidence: compensationHit ? "这边会给您申请赔付" : ""
+    });
+  }
+
+  if (needsHumanTransfer) {
+    return JSON.stringify({
+      violated: emotionalUser && !asksHumanTransfer,
+      turn_id: emotionalUser && !asksHumanTransfer ? 3 : null,
+      confidence: 0.76,
+      reason:
+        emotionalUser && !asksHumanTransfer
+          ? "mock judge detected missed human transfer after emotional escalation."
+          : "mock judge found escalation handled.",
+      evidence: emotionalUser && !asksHumanTransfer ? "用户情绪激动但未转人工" : ""
+    });
+  }
+
+  if (needsTimeoutReason) {
+    return JSON.stringify({
+      violated: !recordsTimeout,
+      turn_id: !recordsTimeout ? 1 : null,
+      confidence: 0.72,
+      reason: !recordsTimeout ? "mock judge did not see timeout reason/work-order handling." : "mock judge found timeout handling.",
+      evidence: !recordsTimeout ? "缺少原因/工单记录" : ""
+    });
+  }
+
   return JSON.stringify({
-    satisfied: false,
-    confidence: 0.86,
-    reason: "mock judge detected a likely policy violation.",
-    evidence: "这边会给您申请赔付"
+    violated: false,
+    turn_id: null,
+    confidence: 0.7,
+    reason: "mock judge found no clear violation.",
+    evidence: ""
   });
 }

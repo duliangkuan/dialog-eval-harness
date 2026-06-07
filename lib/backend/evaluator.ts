@@ -36,7 +36,7 @@ export async function evaluateDialogue(input: {
   );
 
   for (const judge of judgeResults) {
-    requestIds.push(judge.requestId);
+    requestIds.push(...judge.requestIds);
     if (judge.violation) {
       violations.push(judge.violation);
     }
@@ -174,7 +174,57 @@ async function runLlmJudge(input: {
   constraint: Constraint;
   policy: string;
   transcript: DialogueTurn[];
-}): Promise<{ violation: Violation | null; requestId: string }> {
+}): Promise<{ violation: Violation | null; requestIds: string[] }> {
+  const sampleCount = input.constraint.severity >= 4 ? 3 : 1;
+  const votes = await Promise.all(
+    Array.from({ length: sampleCount }, () => runSingleJudge(input))
+  );
+
+  const violatedVotes = votes.filter((vote) => vote.violated);
+  const requestIds = votes.map((vote) => vote.request_id);
+  const violationThreshold = Math.floor(sampleCount / 2) + 1;
+
+  if (violatedVotes.length < violationThreshold) {
+    return { violation: null, requestIds };
+  }
+
+  const representative = [...violatedVotes].sort(
+    (a, b) => b.confidence - a.confidence || (a.turn_id ?? 999) - (b.turn_id ?? 999)
+  )[0];
+  const confidence = average(votes.map((vote) => vote.confidence));
+  const deduction = input.constraint.veto ? "VETO" : input.constraint.severity * 5;
+
+  return {
+    requestIds,
+    violation: {
+      rule_id: input.constraint.rule_id,
+      turn_id: representative.turn_id ?? 1,
+      severity: input.constraint.severity,
+      confidence,
+      reason:
+        sampleCount > 1
+          ? `${representative.reason} Judge votes: ${violatedVotes.length}/${sampleCount}.`
+          : representative.reason,
+      evidence: representative.evidence,
+      deduction,
+      verifier: input.constraint.verifier,
+      judge_votes: votes
+    }
+  };
+}
+
+async function runSingleJudge(input: {
+  constraint: Constraint;
+  policy: string;
+  transcript: DialogueTurn[];
+}): Promise<{
+  violated: boolean;
+  turn_id: number | null;
+  confidence: number;
+  reason: string;
+  evidence: string;
+  request_id: string;
+}> {
   const result = await callModel(
     [
       {
@@ -214,30 +264,20 @@ If no violation, set violated=false and use turn_id=null.`
 
   const parsed = extractJsonObject(result.content) as {
     violated?: boolean;
+    satisfied?: boolean;
     turn_id?: number | null;
     confidence?: number;
     reason?: string;
     evidence?: string;
   };
 
-  if (!parsed.violated) {
-    return { violation: null, requestId: result.requestId };
-  }
-
-  const deduction = input.constraint.veto ? "VETO" : input.constraint.severity * 5;
-
   return {
-    requestId: result.requestId,
-    violation: {
-      rule_id: input.constraint.rule_id,
-      turn_id: parsed.turn_id ?? 1,
-      severity: input.constraint.severity,
-      confidence: clamp(Number(parsed.confidence ?? 0.7), 0, 1),
-      reason: parsed.reason || "LLM Judge 判定该约束被违反。",
-      evidence: parsed.evidence || "",
-      deduction,
-      verifier: input.constraint.verifier
-    }
+    violated: Boolean(parsed.violated ?? (parsed.satisfied === false)),
+    turn_id: parsed.turn_id ?? null,
+    confidence: clamp(Number(parsed.confidence ?? 0.7), 0, 1),
+    reason: parsed.reason || "LLM Judge 判定该约束被违反。",
+    evidence: parsed.evidence || "",
+    request_id: result.requestId
   };
 }
 
@@ -265,4 +305,9 @@ function clamp(value: number, min: number, max: number) {
 
 function round(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function average(values: number[]) {
+  if (!values.length) return 0;
+  return round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
