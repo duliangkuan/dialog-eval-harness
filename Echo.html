@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Echo · 多轮对话模型评测系统</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg-warm: #FAF8F5;
+    --bg-card: #FFFFFF;
+    --bg-sidebar: #F5F3EF;
+    --ink: #2D2D2D;
+    --ink-muted: #8C8C8C;
+    --ink-light: #B0ADA8;
+    --accent: #4A9B7F;
+    --accent-light: #EDF7F2;
+    --accent-dark: #3A7D65;
+    --success: #4A9B7F;
+    --success-light: #EDF7F2;
+    --error: #C75450;
+    --error-light: #FDF0EF;
+    --warning: #D4944A;
+    --warning-light: #FFF8F0;
+    --border: #E8E5E0;
+    --border-light: #F0EDE8;
+    --shadow: 0 2px 8px rgba(45, 45, 45, 0.06);
+    --shadow-lg: 0 8px 32px rgba(45, 45, 45, 0.10);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-xs: 6px;
+    --font-display: 'Noto Serif SC', serif;
+    --font-body: -apple-system, 'PingFang SC', 'Helvetica Neue', 'Microsoft YaHei', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  html, body, #root { height: 100%; }
+  body {
+    font-family: var(--font-body);
+    color: var(--ink);
+    background: var(--bg-warm);
+    -webkit-font-smoothing: antialiased;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  ::selection { background: var(--accent-light); color: var(--accent-dark); }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-light); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useCallback, useMemo, Fragment } = React;
+
+/* ============================================================
+   Design decisions (Takram-inspired "Echo"):
+   - Warm white (#FAF8F5) base → 温润不冰冷
+   - Muted teal (#4A9B7F) accent → 自然、思辨
+   - Noto Serif SC for page titles → 人文气质
+   - Soft shadows, generous padding → 呼吸感
+   - Data tables use mono font → 精确感
+   - No left-border accent cards (anti-slop)
+   - No emoji icons (anti-slop)
+   - Rounded but not bubble-like (12px max)
+============================================================ */
+
+// ─── Mock Data ───────────────────────────────────────────────
+
+const INTENTS = [
+  { id: 1, name: '意图识别提示词', desc: '多轮对话意图识别', versions: 6, activeVersion: 'v20', updatedAt: '2026-05-20 14:30', status: 'active' },
+  { id: 2, name: '全局路由提示词', desc: ' 17.0', versions: 3, activeVersion: 'v17', updatedAt: '2026-05-18 09:15', status: 'active' },
+  { id: 3, name: '打车意图测试', desc: '出行场景意图分类', versions: 2, activeVersion: 'v2', updatedAt: '2026-05-15 16:40', status: 'draft' },
+  { id: 4, name: '语音反馈提示词', desc: '语音交互反馈策略', versions: 4, activeVersion: 'v4', updatedAt: '2026-05-12 11:20', status: 'active' },
+];
+
+const VERSIONS = [
+  { id: 'v20', name: '意图识别提示词', status: '已启用', updatedAt: '2026-03-03 06:46', updater: 'system' },
+  { id: 'v19', name: '意图识别提示词', status: '未启用', updatedAt: '2026-01-29 13:05', updater: 'system' },
+  { id: 'v18', name: '打车意图测试', status: '未启用', updatedAt: '2026-01-29 06:50', updater: 'system' },
+  { id: 'v17', name: '全局路由提示词（17.0）', status: '未启用', updatedAt: '2026-01-28 09:04', updater: 'system' },
+  { id: 'v1', name: '意图识别提示词', status: '未启用', updatedAt: '2026-01-20 06:36', updater: 'system' },
+];
+
+const TESTSETS = [
+  { id: 1, name: '测试集 1', cases: 6262, source: 'CSV 上传', createdAt: '2026-05-10', updater: 'admin' },
+  { id: 2, name: '测试集 2', cases: 300, source: 'CSV 上传', createdAt: '2026-04-25', updater: 'admin' },
+  { id: 3, name: '测试集 3', cases: 150, source: '自动生成', createdAt: '2026-04-20', updater: 'system' },
+  { id: 4, name: '测试集 4', cases: 500, source: 'CSV 上传', createdAt: '2026-04-15', updater: 'admin' },
+];
+
+const EXPERIMENTS = [
+  { id: '933e65d8', topic: '意图识别全量回归', testset: '测试集 1', status: '完成', progress: 100, startedAt: '2026-05-20 17:54', duration: '2405 秒', intents: ['意图识别提示词', '全局路由提示词'], evaluators: ['PII 泄露检测', '毒性检测'] },
+  { id: '53622fb8', topic: '语音反馈混淆测试', testset: '测试集 2', status: '完成', progress: 100, startedAt: '2026-05-20 17:33', duration: '109 秒', intents: ['语音反馈提示词'], evaluators: ['对话连贯性评估'] },
+  { id: 'b99784ba', topic: '语音反馈增量验证', testset: '测试集 2', status: '运行中', progress: 64, startedAt: '2026-05-20 17:26', duration: '—', intents: ['语音反馈提示词'], evaluators: ['毒性检测', '偏见与公平'] },
+  { id: '53622f47', topic: '打车场景专项', testset: '测试集 3', status: '完成', progress: 100, startedAt: '2026-05-19 17:25', duration: '113 秒', intents: ['打车意图测试'], evaluators: ['意图准确率'] },
+  { id: '6054d869', topic: '闲聊边界压测', testset: '测试集 4', status: '失败', progress: 18, startedAt: '2026-05-19 10:00', duration: '45 秒', intents: ['意图识别提示词'], evaluators: ['PII 泄露检测', '提示注入检测'] },
+];
+
+const EVAL_RESULTS = [
+  { intentId: 0, name: '闲聊', realCount: 935, recall: 0.9454, predictCount: 1088, precision: 0.8125 },
+  { intentId: 2, name: '咨询', realCount: 1318, recall: 0.9757, predictCount: 1299, precision: 0.9899 },
+  { intentId: 8, name: '记忆', realCount: 909, recall: 0.9768, predictCount: 906, precision: 0.9801 },
+  { intentId: 9, name: '外呼', realCount: 914, recall: 0.9452, predictCount: 888, precision: 0.9729 },
+  { intentId: 12, name: '通知', realCount: 76, recall: 0.9868, predictCount: 84, precision: 0.8928 },
+  { intentId: 13, name: '生鲜', realCount: 1527, recall: 0.9364, predictCount: 1444, precision: 0.9903 },
+  { intentId: 76, name: '外卖', realCount: 334, recall: 0.9640, predictCount: 325, precision: 0.9907 },
+  { intentId: 53, name: '美甲', realCount: 83, recall: 0.4819, predictCount: 40, precision: 1.0000 },
+  { intentId: 54, name: '管理', realCount: 85, recall: 1.0000, predictCount: 108, precision: 0.7870 },
+  { intentId: 23, name: '未知意图', realCount: 80, recall: 0.975, predictCount: 80, precision: 0.975 },
+];
+
+const EVALUATORS = [
+  { id: 1, name: 'PII 泄露检测', type: 'LLM as a judge', outputType: '对/错', category: '安全性', builtin: true },
+  { id: 2, name: '提示注入检测', type: 'LLM as a judge', outputType: '对/错', category: '安全性', builtin: true },
+  { id: 3, name: '毒性检测', type: 'LLM as a judge', outputType: '分数', category: '安全', builtin: true },
+  { id: 4, name: '偏见与公平', type: 'LLM as a judge', outputType: '分数', category: '质量', builtin: true },
+  { id: 5, name: '对话连贯性评估', type: '自定义', outputType: '评价内容', category: '对话', builtin: false },
+  { id: 6, name: '意图准确率', type: '规则', outputType: '分数', category: '质量', builtin: false },
+];
+
+const MODELS = [
+  { id: 1, name: 'GPT-4o', provider: 'OpenAI', apiKey: 'sk-****...3kF9', status: '正常', lastUsed: '2026-05-20' },
+  { id: 2, name: 'Claude-3.5 Sonnet', provider: 'Anthropic', apiKey: 'sk-ant-****...xQ2', status: '正常', lastUsed: '2026-05-20' },
+  { id: 3, name: 'DeepSeek-V3', provider: 'DeepSeek', apiKey: 'ds-****...mP7', status: '正常', lastUsed: '2026-05-19' },
+  { id: 4, name: 'GPT-4o-mini', provider: 'OpenAI', apiKey: 'sk-****...8nL', status: '异常', lastUsed: '2026-05-19' },
+];
+
+// ─── Shared Components ───────────────────────────────────────
+
+const sidebarStyles = {
+  container: { width: 240, minWidth: 240, height: '100vh', background: 'var(--bg-sidebar)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  logo: { padding: '24px 20px 20px', borderBottom: '1px solid var(--border)' },
+  logoText: { fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--ink)', letterSpacing: '0.02em' },
+  logoSub: { fontSize: 11, color: 'var(--ink-muted)', marginTop: 2 },
+  nav: { flex: 1, overflow: 'auto', padding: '12px 0' },
+  section: { padding: '0 12px', marginBottom: 4 },
+  sectionLabel: { fontSize: 11, fontWeight: 600, color: 'var(--ink-light)', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '12px 8px 6px', userSelect: 'none' },
+  item: (active) => ({
+    display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 'var(--radius-sm)',
+    cursor: 'pointer', fontSize: 13.5, fontWeight: active ? 500 : 400, transition: 'all 0.15s ease',
+    background: active ? 'var(--accent-light)' : 'transparent',
+    color: active ? 'var(--accent-dark)' : 'var(--ink)',
+  }),
+};
+
+function Sidebar({ currentPage, onNavigate }) {
+  const sections = [
+    { label: '概览', items: [{ key: 'dashboard', label: '项目概览', icon: '◈' }] },
+    { label: 'Prompt 管理', items: [
+      { key: 'intents', label: '意图管理', icon: '◇' },
+      { key: 'versions', label: '版本管理', icon: '▤' },
+    ]},
+    { label: '测试集管理', items: [
+      { key: 'testsets', label: '测试集列表', icon: '▦' },
+      { key: 'experiments', label: '自动化评测', icon: '▶' },
+    ]},
+    { label: '评估', items: [
+      { key: 'evaluators', label: '评估员管理', icon: '◉' },
+      { key: 'results', label: '评测结果', icon: '◫' },
+      { key: 'visualization', label: '结果可视化', icon: '◰' },
+    ]},
+    { label: '工具', items: [
+      { key: 'debug', label: '在线调试', icon: '⟐' },
+    ]},
+    { label: '设置', items: [
+      { key: 'models', label: '模型管理', icon: '⬡' },
+    ]},
+  ];
+
+  return (
+    <div style={sidebarStyles.container}>
+      <div style={sidebarStyles.logo}>
+        <div style={sidebarStyles.logoText}>Echo</div>
+        <div style={sidebarStyles.logoSub}>多轮对话模型评测系统</div>
+      </div>
+      <nav style={sidebarStyles.nav}>
+        {sections.map(sec => (
+          <div key={sec.label} style={sidebarStyles.section}>
+            <div style={sidebarStyles.sectionLabel}>{sec.label}</div>
+            {sec.items.map(item => (
+              <div key={item.key} style={sidebarStyles.item(currentPage === item.key)}
+                onClick={() => onNavigate(item.key)}
+                onMouseEnter={e => { if (currentPage !== item.key) e.currentTarget.style.background = 'rgba(74,155,127,0.06)'; }}
+                onMouseLeave={e => { if (currentPage !== item.key) e.currentTarget.style.background = 'transparent'; }}>
+                <span style={{ fontSize: 14, opacity: 0.7 }}>{item.icon}</span>
+                {item.label}
+              </div>
+            ))}
+          </div>
+        ))}
+      </nav>
+      <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--ink-muted)' }}>
+        v0.1.0 · 内部版
+      </div>
+    </div>
+  );
+}
+
+// ─── UI Primitives ───────────────────────────────────────────
+
+function PageHeader({ title, subtitle, actions }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+      <div>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, marginBottom: 4 }}>{title}</h1>
+        {subtitle && <p style={{ fontSize: 13, color: 'var(--ink-muted)' }}>{subtitle}</p>}
+      </div>
+      {actions && <div style={{ display: 'flex', gap: 10 }}>{actions}</div>}
+    </div>
+  );
+}
+
+function Button({ children, variant = 'primary', size = 'md', onClick, style: extraStyle }) {
+  const base = { border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, borderRadius: 'var(--radius-sm)', transition: 'all 0.15s ease', display: 'inline-flex', alignItems: 'center', gap: 6 };
+  const sizes = { sm: { fontSize: 12, padding: '5px 12px' }, md: { fontSize: 13, padding: '8px 18px' }, lg: { fontSize: 14, padding: '10px 24px' } };
+  const variants = {
+    primary: { background: 'var(--accent)', color: '#fff' },
+    secondary: { background: 'var(--bg-warm)', color: 'var(--ink)', border: '1px solid var(--border)' },
+    ghost: { background: 'transparent', color: 'var(--accent)' },
+    danger: { background: 'var(--error-light)', color: 'var(--error)' },
+  };
+  return <button style={{ ...base, ...sizes[size], ...variants[variant], ...extraStyle }} onClick={onClick}>{children}</button>;
+}
+
+function Badge({ children, type = 'default' }) {
+  const colors = {
+    default: { bg: 'var(--border-light)', color: 'var(--ink-muted)' },
+    success: { bg: 'var(--success-light)', color: 'var(--success)' },
+    error: { bg: 'var(--error-light)', color: 'var(--error)' },
+    warning: { bg: 'var(--warning-light)', color: 'var(--warning)' },
+    accent: { bg: 'var(--accent-light)', color: 'var(--accent-dark)' },
+  };
+  const c = colors[type] || colors.default;
+  return <span style={{ display: 'inline-block', fontSize: 12, padding: '2px 10px', borderRadius: 'var(--radius-xs)', background: c.bg, color: c.color, fontWeight: 500 }}>{children}</span>;
+}
+
+function Card({ children, style: extraStyle, onClick }) {
+  return (
+    <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', padding: 24, cursor: onClick ? 'pointer' : 'default', transition: 'box-shadow 0.2s ease', ...extraStyle }}
+      onClick={onClick}
+      onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; }}
+      onMouseLeave={e => { if (onClick) e.currentTarget.style.boxShadow = 'var(--shadow)'; }}>
+      {children}
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, trend }) {
+  return (
+    <Card style={{ flex: 1, minWidth: 180 }}>
+      <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginBottom: 8, fontWeight: 500 }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--ink)', letterSpacing: '-0.02em' }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: trend === 'up' ? 'var(--success)' : trend === 'down' ? 'var(--error)' : 'var(--ink-muted)', marginTop: 6 }}>{sub}</div>}
+    </Card>
+  );
+}
+
+function Table({ columns, data, onRowClick }) {
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            {columns.map(col => (
+              <th key={col.key} style={{ textAlign: col.align || 'left', padding: '12px 16px', fontSize: 12, fontWeight: 600, color: 'var(--ink-muted)', borderBottom: '2px solid var(--border)', whiteSpace: 'nowrap', letterSpacing: '0.02em' }}>
+                {col.title}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row, i) => (
+            <tr key={i} style={{ cursor: onRowClick ? 'pointer' : 'default', transition: 'background 0.1s' }}
+              onClick={() => onRowClick?.(row)}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(74,155,127,0.03)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              {columns.map(col => (
+                <td key={col.key} style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-light)', fontSize: 13, fontFamily: col.mono ? 'var(--font-mono)' : 'inherit', color: col.muted ? 'var(--ink-muted)' : 'var(--ink)', whiteSpace: 'nowrap' }}>
+                  {col.render ? col.render(row[col.key], row) : row[col.key]}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Modal({ title, open, onClose, width, children }) {
+  if (!open) return null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(45,45,45,0.3)', backdropFilter: 'blur(4px)' }} />
+      <div style={{ position: 'relative', background: 'var(--bg-card)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-lg)', width: width || 640, maxHeight: '85vh', overflow: 'auto', padding: 32 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 600 }}>{title}</h2>
+          <span style={{ cursor: 'pointer', fontSize: 20, color: 'var(--ink-muted)', lineHeight: 1 }} onClick={onClose}>×</span>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ text }) {
+  return <div style={{ padding: 48, textAlign: 'center', color: 'var(--ink-muted)', fontSize: 13 }}>{text}</div>;
+}
+
+function TabBar({ tabs, active, onChange }) {
+  return (
+    <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border-light)', marginBottom: 24 }}>
+      {tabs.map(t => (
+        <div key={t.key} onClick={() => onChange(t.key)} style={{
+          padding: '10px 20px', fontSize: 13, fontWeight: active === t.key ? 600 : 400, cursor: 'pointer',
+          color: active === t.key ? 'var(--accent-dark)' : 'var(--ink-muted)',
+          borderBottom: active === t.key ? '2px solid var(--accent)' : '2px solid transparent',
+          marginBottom: -2, transition: 'all 0.15s ease',
+        }}>{t.label}</div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Mini Chart (SVG bar) ────────────────────────────────────
+
+function MiniBar({ values, height = 32, width = 120 }) {
+  const max = Math.max(...values);
+  const barW = (width - (values.length - 1) * 2) / values.length;
+  return (
+    <svg width={width} height={height} style={{ display: 'block' }}>
+      {values.map((v, i) => {
+        const h = (v / max) * height * 0.9;
+        return <rect key={i} x={i * (barW + 2)} y={height - h} width={barW} height={h} rx={2} fill="var(--accent)" opacity={0.6 + (v / max) * 0.4} />;
+      })}
+    </svg>
+  );
+}
+
+function MiniDonut({ value, size = 48, stroke = 5 }) {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - value);
+  return (
+    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} />
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--accent)" strokeWidth={stroke}
+        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// ─── Page: Dashboard ─────────────────────────────────────────
+
+function PageDashboard({ onNavigate }) {
+  const recentExps = EXPERIMENTS.slice(0, 3);
+  return (
+    <div>
+      <PageHeader title="项目概览" subtitle="Echo 评测系统运行状态一览" />
+      <div style={{ display: 'flex', gap: 16, marginBottom: 28 }}>
+        <StatCard label="总实验次数" value="47" sub="本周 +12" trend="up" />
+        <StatCard label="平均准确率" value="93.4%" sub="较上周 +1.2%" trend="up" />
+        <StatCard label="活跃提示词" value="4" />
+        <StatCard label="测试集" value="4" sub="共 7,212 条用例" />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
+        <Card>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, fontFamily: 'var(--font-display)' }}>最近实验</div>
+          {recentExps.map(exp => (
+            <div key={exp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--border-light)' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>{exp.testset}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 2 }}>{exp.topic} · {exp.startedAt}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {exp.duration !== '—' && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{exp.duration}</span>}
+                <Badge type={exp.status === '完成' ? 'success' : exp.status === '失败' ? 'error' : 'warning'}>{exp.status}</Badge>
+              </div>
+            </div>
+          ))}
+          <div style={{ marginTop: 12 }}>
+            <Button variant="ghost" size="sm" onClick={() => onNavigate('experiments')}>查看全部实验 →</Button>
+          </div>
+        </Card>
+
+        <Card>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, fontFamily: 'var(--font-display)' }}>准确率趋势（近 7 次）</div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 140, padding: '0 8px' }}>
+            {[88, 91, 89, 93, 94, 92, 93.4].map((v, i) => {
+              const h = ((v - 80) / 20) * 120;
+              return (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--ink-muted)' }}>{v}%</span>
+                  <div style={{ width: '100%', height: h, background: i === 6 ? 'var(--accent)' : 'var(--accent-light)', borderRadius: '4px 4px 0 0', transition: 'height 0.3s ease' }} />
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 8px 0', fontSize: 11, color: 'var(--ink-light)' }}>
+            <span>#41</span><span>#42</span><span>#43</span><span>#44</span><span>#45</span><span>#46</span><span>#47</span>
+          </div>
+        </Card>
+      </div>
+
+      <Card>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, fontFamily: 'var(--font-display)' }}>快速入口</div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          {[
+            { label: '发起评测', desc: '选择提示词 + 测试集批量跑', page: 'experiments' },
+            { label: '在线调试', desc: '单条对话快速验证', page: 'debug' },
+            { label: '新建评估员', desc: '自定义评估策略', page: 'evaluators' },
+            { label: '模型管理', desc: '配置 API Key', page: 'models' },
+          ].map(q => (
+            <div key={q.label} onClick={() => onNavigate(q.page)}
+              style={{ flex: 1, padding: '16px 20px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', cursor: 'pointer', transition: 'all 0.15s ease' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-light)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'transparent'; }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{q.label}</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>{q.desc}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Page: Intent Management ─────────────────────────────────
+
+function PageIntents() {
+  const [modalOpen, setModalOpen] = useState(false);
+  const columns = [
+    { key: 'name', title: '意图名称', render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
+    { key: 'desc', title: '描述', muted: true },
+    { key: 'versions', title: '版本数', mono: true },
+    { key: 'activeVersion', title: '当前版本', render: (v) => <Badge type="accent">{v}</Badge> },
+    { key: 'status', title: '状态', render: (v) => <Badge type={v === 'active' ? 'success' : 'default'}>{v === 'active' ? '启用' : '草稿'}</Badge> },
+    { key: 'updatedAt', title: '更新时间', muted: true },
+    { key: 'actions', title: '操作', render: (_, row) => (
+      <div style={{ display: 'flex', gap: 12 }}>
+        <Button variant="ghost" size="sm">查看</Button>
+        <Button variant="ghost" size="sm">编辑</Button>
+      </div>
+    )},
+  ];
+  return (
+    <div>
+      <PageHeader title="意图管理" subtitle="管理任务指令提示词，创建和维护对话意图" actions={<Button onClick={() => setModalOpen(true)}>新建意图</Button>} />
+      <Card style={{ padding: 0 }}>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: 'var(--ink-muted)' }}>共 {INTENTS.length} 个意图</span>
+          <input placeholder="搜索意图..." style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '6px 14px', fontSize: 13, outline: 'none', width: 220, background: 'var(--bg-warm)', fontFamily: 'inherit' }} />
+        </div>
+        <Table columns={columns} data={INTENTS} />
+      </Card>
+      <Modal title="新建意图" open={modalOpen} onClose={() => setModalOpen(false)}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>意图名称 <span style={{ color: 'var(--error)' }}>*</span></label>
+            <input style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }} placeholder="如：打车意图识别" />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>描述</label>
+            <input style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }} placeholder="简要描述该意图的用途" />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>System Prompt <span style={{ color: 'var(--error)' }}>*</span></label>
+            <textarea rows={8} style={{ width: '100%', padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', lineHeight: 1.7, outline: 'none', resize: 'vertical' }} placeholder="# 任务描述&#10;你是一个多轮对话意图识别专家..." />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>取消</Button>
+            <Button>创建意图</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Page: Version Management ────────────────────────────────
+
+function PageVersions() {
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState(null);
+  const columns = [
+    { key: 'id', title: '版本号', mono: true, render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
+    { key: 'name', title: '名称' },
+    { key: 'status', title: '状态', render: (v) => <Badge type={v === '已启用' ? 'success' : 'default'}>{v}</Badge> },
+    { key: 'updatedAt', title: '更新时间', muted: true, mono: true },
+    { key: 'updater', title: '更新人', muted: true },
+    { key: 'actions', title: '操作', render: (_, row) => (
+      <div style={{ display: 'flex', gap: 12 }}>
+        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedVersion(row); setDetailOpen(true); }}>查看</Button>
+        <Button variant="ghost" size="sm">编辑</Button>
+        {row.status !== '已启用' && <Button variant="ghost" size="sm" style={{ color: 'var(--error)' }}>删除</Button>}
+      </div>
+    )},
+  ];
+  return (
+    <div>
+      <PageHeader title="版本管理" subtitle="管理意图提示词的各个版本" actions={<Button>新建草稿版本</Button>} />
+      <Card style={{ padding: 0 }}>
+        <Table columns={columns} data={VERSIONS} onRowClick={(row) => { setSelectedVersion(row); setDetailOpen(true); }} />
+      </Card>
+      <Modal title="版本详情" open={detailOpen} onClose={() => setDetailOpen(false)} width={720}>
+        {selectedVersion && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div><span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>名称</span><div style={{ marginTop: 4, fontWeight: 500 }}>{selectedVersion.name}</div></div>
+              <div><span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>状态</span><div style={{ marginTop: 4 }}><Badge type={selectedVersion.status === '已启用' ? 'success' : 'default'}>{selectedVersion.status}</Badge></div></div>
+              <div><span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>更新时间</span><div style={{ marginTop: 4, fontFamily: 'var(--font-mono)', fontSize: 13 }}>{selectedVersion.updatedAt}</div></div>
+              <div><span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>更新人</span><div style={{ marginTop: 4 }}>{selectedVersion.updater}</div></div>
+            </div>
+            <div>
+              <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>System Prompt</span>
+              <div style={{ marginTop: 8, padding: 20, background: 'var(--bg-warm)', borderRadius: 'var(--radius-sm)', fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap', maxHeight: 360, overflow: 'auto' }}>
+{`# 任务描述
+你是一个多轮对话意图识别专家，需要基于完整的对话历史识别**用户最后一句**(last_chat) 的最贴近的意图、置信度。历史对话中的每句话都已标注意图前缀。
+注意：进行意图识别之前必须先进行推理分析，再执行。
+
+# 置信度定义
+3：表示高置信度
+2：表示中置信度
+1：表示低置信度
+
+# 内部思考流程 (绝对不要输出此部分)
+1. 理解意图含义。
+2. 理解关键规则。
+3. 进行意图识别，评估意图的置信度。
+4. 输出置信度最大的意图。`}
+              </div>
+            </div>
+            <div>
+              <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>关联意图</span>
+              <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Badge type="accent">意图：0 / 其它意图 / v1</Badge>
+                <Badge type="accent">意图：11 / 天气预报 / v1</Badge>
+                <Badge type="accent">意图：2 / 打车 / v3</Badge>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Page: Test Sets ─────────────────────────────────────────
+
+function PageTestSets() {
+  const [uploadModal, setUploadModal] = useState(false);
+  const columns = [
+    { key: 'name', title: '测试集名称', render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
+    { key: 'cases', title: '用例数', mono: true },
+    { key: 'source', title: '来源', render: (v) => <Badge type={v === '自动生成' ? 'accent' : 'default'}>{v}</Badge> },
+    { key: 'createdAt', title: '创建时间', muted: true, mono: true },
+    { key: 'updater', title: '创建人', muted: true },
+    { key: 'actions', title: '操作', render: () => (
+      <div style={{ display: 'flex', gap: 12 }}>
+        <Button variant="ghost" size="sm">查看</Button>
+        <Button variant="ghost" size="sm">下载</Button>
+        <Button variant="ghost" size="sm" style={{ color: 'var(--error)' }}>删除</Button>
+      </div>
+    )},
+  ];
+  return (
+    <div>
+      <PageHeader title="测试集列表" subtitle="管理评测用例集，支持 CSV 上传或自动生成" actions={
+        <Fragment>
+          <Button variant="secondary" onClick={() => setUploadModal(true)}>上传 CSV</Button>
+          <Button>自动生成</Button>
+        </Fragment>
+      } />
+      <Card style={{ padding: 0 }}>
+        <Table columns={columns} data={TESTSETS} />
+      </Card>
+      <Modal title="上传测试集" open={uploadModal} onClose={() => setUploadModal(false)}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>测试集名称 <span style={{ color: 'var(--error)' }}>*</span></label>
+            <input style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }} placeholder="如：意图识别测试集 v4" />
+          </div>
+          <div>
+            <div style={{ border: '2px dashed var(--border)', borderRadius: 'var(--radius)', padding: '40px 20px', textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
+              <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>点击或拖拽上传 CSV 文件</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>支持 .csv 格式，每行一条测试用例</div>
+            </div>
+          </div>
+          <div style={{ padding: 16, background: 'var(--bg-warm)', borderRadius: 'var(--radius-sm)', fontSize: 12, color: 'var(--ink-muted)', lineHeight: 1.8 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--ink)' }}>CSV 格式说明</div>
+            <div style={{ fontFamily: 'var(--font-mono)' }}>
+              dialogue_context, current_query, expected_intent<br/>
+              "user:帮我打个车\nai:好的", "帮我记一下明天 9 点开会", "记忆助手"
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <Button variant="secondary" onClick={() => setUploadModal(false)}>取消</Button>
+            <Button>上传</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Page: Experiments (Auto Eval) ───────────────────────────
+
+function PageExperiments() {
+  const [createModal, setCreateModal] = useState(false);
+
+  // Progress bar component for "运行中"
+  function StatusCell({ status, progress }) {
+    if (status === '完成') {
+      return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="8" fill="var(--success)" opacity="0.15" />
+            <path d="M5.5 9.2L7.8 11.5L12.5 6.5" stroke="var(--success)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          </svg>
+          <span style={{ fontSize: 12, color: 'var(--success)', fontWeight: 500 }}>完成</span>
+        </span>
+      );
+    }
+    if (status === '失败') {
+      return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <circle cx="9" cy="9" r="8" fill="var(--ink-light)" opacity="0.2" />
+            <path d="M5.5 9.2L7.8 11.5L12.5 6.5" stroke="var(--ink-light)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          </svg>
+          <span style={{ fontSize: 12, color: 'var(--ink-light)', fontWeight: 500 }}>失败</span>
+        </span>
+      );
+    }
+    // 运行中 → 进度条
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 120 }}>
+        <div style={{ flex: 1, height: 6, background: 'var(--border-light)', borderRadius: 3, overflow: 'hidden' }}>
+          <div style={{ width: `${progress}%`, height: '100%', background: 'var(--accent)', borderRadius: 3, transition: 'width 0.5s ease' }} />
+        </div>
+        <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 500, whiteSpace: 'nowrap' }}>{progress}%</span>
+      </div>
+    );
+  }
+
+  // Tag list component (compact)
+  function TagList({ items, max }) {
+    const show = max ? items.slice(0, max) : items;
+    const more = max && items.length > max ? items.length - max : 0;
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {show.map((t, i) => (
+          <span key={i} style={{ display: 'inline-block', fontSize: 11, padding: '2px 8px', borderRadius: 'var(--radius-xs)', background: 'var(--accent-light)', color: 'var(--accent-dark)', fontWeight: 500, whiteSpace: 'nowrap' }}>{t}</span>
+        ))}
+        {more > 0 && <span style={{ fontSize: 11, color: 'var(--ink-muted)', padding: '2px 4px' }}>+{more}</span>}
+      </div>
+    );
+  }
+
+  const columns = [
+    { key: 'id', title: '任务 ID', mono: true, render: (v) => <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{v}</span> },
+    { key: 'topic', title: '测试主题', render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
+    { key: 'testset', title: '测试集' },
+    { key: 'intents', title: '选用意图', render: (v) => <TagList items={v} max={2} /> },
+    { key: 'evaluators', title: '评估员', render: (v) => <TagList items={v} max={2} /> },
+    { key: 'status', title: '状态', render: (v, row) => <StatusCell status={v} progress={row.progress} /> },
+    { key: 'startedAt', title: '开始时间', muted: true, mono: true },
+    { key: 'duration', title: '耗时', mono: true },
+    { key: 'actions', title: '操作', render: (_, row) => (
+      <div style={{ display: 'flex', gap: 12 }}>
+        {row.status === '完成' && <Button variant="ghost" size="sm">查看结果</Button>}
+        <Button variant="ghost" size="sm">重跑</Button>
+      </div>
+    )},
+  ];
+  return (
+    <div>
+      <PageHeader title="自动化评测" subtitle="批量运行模型对话测试，对比不同版本与模型的表现" actions={<Button onClick={() => setCreateModal(true)}>发起评测任务</Button>} />
+      <Card style={{ padding: 0 }}>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: 'var(--ink-muted)' }}>共 {EXPERIMENTS.length} 次实验</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {['全部', '完成', '运行中', '失败'].map(f => (
+              <span key={f} style={{ fontSize: 12, padding: '4px 12px', borderRadius: 'var(--radius-xs)', cursor: 'pointer', background: f === '全部' ? 'var(--accent-light)' : 'transparent', color: f === '全部' ? 'var(--accent-dark)' : 'var(--ink-muted)', fontWeight: f === '全部' ? 500 : 400 }}>{f}</span>
+            ))}
+          </div>
+        </div>
+        <Table columns={columns} data={EXPERIMENTS} />
+      </Card>
+
+      <Modal title="发起评测任务" open={createModal} onClose={() => setCreateModal(false)} width={560}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ padding: 16, background: 'var(--accent-light)', borderRadius: 'var(--radius-sm)', fontSize: 13, color: 'var(--accent-dark)', lineHeight: 1.6 }}>
+            选择提示词版本、测试集、评估员和项目模型的组合，系统将自动批量模拟多轮对话并评估结果。
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>测试主题 <span style={{ color: 'var(--error)' }}>*</span></label>
+            <input style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }} placeholder="如：意图识别全量回归" />
+            <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginTop: 4 }}>自定义本次评测的主题名称，方便后续追踪</div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>提示词版本 <span style={{ color: 'var(--error)' }}>*</span></label>
+            <select style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit', outline: 'none', background: 'var(--bg-card)' }}>
+              <option>请选择提示词版本</option>
+              {VERSIONS.map(v => <option key={v.id}>{v.id} - {v.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>测试集 <span style={{ color: 'var(--error)' }}>*</span></label>
+            <select style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit', outline: 'none', background: 'var(--bg-card)' }}>
+              <option>请选择测试集</option>
+              {TESTSETS.map(t => <option key={t.id}>{t.name}（{t.cases} 条）</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>选用意图（可多选）</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {INTENTS.map(intent => (
+                <label key={intent.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox" style={{ accentColor: 'var(--accent)' }} />
+                  {intent.name}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>评估员（可多选）</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {EVALUATORS.map(ev => (
+                <label key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox" style={{ accentColor: 'var(--accent)' }} />
+                  {ev.name}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>项目模型 <span style={{ color: 'var(--error)' }}>*</span></label>
+            <select style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit', outline: 'none', background: 'var(--bg-card)' }}>
+              <option>请选择模型</option>
+              {MODELS.filter(m => m.status === '正常').map(m => <option key={m.id}>{m.name}（{m.provider}）</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+            <Button variant="secondary" onClick={() => setCreateModal(false)}>取消</Button>
+            <Button>开始评测</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Page: Eval Results ──────────────────────────────────────
+
+function PageResults() {
+  const totalPass = 5952; const totalFail = 310; const total = 6262;
+  return (
+    <div>
+      <PageHeader title="评测结果" subtitle="实验 #933e65d8 · 意图识别全量回归 · 测试集1" />
+      <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+        <StatCard label="总用例" value={total.toLocaleString()} />
+        <StatCard label="通过" value={totalPass.toLocaleString()} sub={`${((totalPass/total)*100).toFixed(1)}%`} trend="up" />
+        <StatCard label="失败" value={totalFail.toLocaleString()} sub={`${((totalFail/total)*100).toFixed(1)}%`} trend="down" />
+        <StatCard label="耗时" value="2405s" sub="约 40 分钟" />
+      </div>
+
+      <Card style={{ padding: 0 }}>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-light)' }}>
+          <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'var(--font-display)' }}>指标明细</span>
+        </div>
+        <Table columns={[
+          { key: 'intentId', title: '意图 ID', mono: true },
+          { key: 'name', title: '意图名称', render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
+          { key: 'realCount', title: '真实数量', mono: true },
+          { key: 'recall', title: '召回率', mono: true, render: (v) => {
+            const pct = (v * 100).toFixed(1);
+            return <span style={{ color: v >= 0.95 ? 'var(--success)' : v >= 0.8 ? 'var(--warning)' : 'var(--error)', fontWeight: 500 }}>{pct}%</span>;
+          }},
+          { key: 'predictCount', title: '预测数量', mono: true },
+          { key: 'precision', title: '准确率', mono: true, render: (v) => {
+            const pct = (v * 100).toFixed(1);
+            return <span style={{ color: v >= 0.95 ? 'var(--success)' : v >= 0.8 ? 'var(--warning)' : 'var(--error)', fontWeight: 500 }}>{pct}%</span>;
+          }},
+          { key: 'bar', title: '分布', render: (_, row) => <MiniBar values={[row.recall * 100, row.precision * 100]} width={60} height={20} /> },
+        ]} data={EVAL_RESULTS} />
+      </Card>
+    </div>
+  );
+}
+
+// ─── Page: Evaluators ────────────────────────────────────────
+
+function PageEvaluators() {
+  const [createModal, setCreateModal] = useState(false);
+  const [createMode, setCreateMode] = useState(null); // 'scratch' | 'template'
+
+  const templateCategories = [
+    { key: 'recommended', label: '推荐' },
+    { key: 'security', label: '安全性' },
+    { key: 'quality', label: '质量' },
+    { key: 'conversation', label: '对话' },
+  ];
+  const [selectedCat, setSelectedCat] = useState('recommended');
+
+  const templates = [
+    { name: 'PII 泄露检测', desc: '检测输出内容是否包含个人身份信息，或者是否存在侵犯隐私的行为', type: 'LLM as a judge', category: 'security' },
+    { name: '提示注入检测', desc: '检测输入内容是否包含提示注入的尝试', type: 'LLM as a judge', category: 'security' },
+    { name: '毒性检测', desc: '检测输出内容是否包含有毒元素', type: 'LLM as a judge', category: 'quality' },
+    { name: '偏见与公平', desc: '检测输出内容是否包含偏见或不公平的成分', type: 'LLM as a judge', category: 'quality' },
+    { name: '对话连贯性', desc: '评估多轮对话中模型回复的连贯性和上下文理解能力', type: 'LLM as a judge', category: 'conversation' },
+  ];
+
+  return (
+    <div>
+      <PageHeader title="评估员管理" subtitle="创建和管理评估策略，支持分数、对/错、评价内容三种输出类型" actions={<Button onClick={() => { setCreateMode(null); setCreateModal(true); }}>创建评估员</Button>} />
+      <Card style={{ padding: 0 }}>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 13, color: 'var(--ink-muted)' }}>共 {EVALUATORS.length} 个评估员</span>
+        </div>
+        <Table columns={[
+          { key: 'name', title: '评估员名称', render: (v) => <span style={{ fontWeight: 500 }}>{v}</span> },
+          { key: 'type', title: '类型', render: (v) => <Badge type="accent">{v}</Badge> },
+          { key: 'outputType', title: '输出类型', render: (v) => {
+            const t = v === '分数' ? 'warning' : v === '对/错' ? 'success' : 'default';
+            return <Badge type={t}>{v}</Badge>;
+          }},
+          { key: 'category', title: '分类', muted: true },
+          { key: 'builtin', title: '来源', render: (v) => v ? <span style={{ color: 'var(--ink-muted)', fontSize: 12 }}>系统内置</span> : <span style={{ color: 'var(--accent)', fontSize: 12 }}>自定义</span> },
+          { key: 'actions', title: '操作', render: (_, row) => (
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Button variant="ghost" size="sm">配置</Button>
+              {!row.builtin && <Button variant="ghost" size="sm" style={{ color: 'var(--error)' }}>删除</Button>}
+            </div>
+          )},
+        ]} data={EVALUATORS} />
+      </Card>
+
+      <Modal title="创建评估员" open={createModal} onClose={() => setCreateModal(false)} width={createMode ? 640 : 720}>
+        {!createMode ? (
+          <div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+              <Card onClick={() => setCreateMode('scratch')} style={{ cursor: 'pointer', border: '1px solid var(--border)', boxShadow: 'none', textAlign: 'center', padding: '32px 24px' }}>
+                <div style={{ fontSize: 28, marginBottom: 12, opacity: 0.4 }}>◇</div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>从零开始创建</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>自定义评估提示词和输出类型</div>
+              </Card>
+              <Card onClick={() => setCreateMode('template')} style={{ cursor: 'pointer', border: '1px solid var(--border)', boxShadow: 'none', textAlign: 'center', padding: '32px 24px' }}>
+                <div style={{ fontSize: 28, marginBottom: 12, opacity: 0.4 }}>▦</div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>根据模板创建</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>从预设模板快速创建评估员</div>
+              </Card>
+            </div>
+          </div>
+        ) : createMode === 'template' ? (
+          <div>
+            <Button variant="ghost" size="sm" onClick={() => setCreateMode(null)} style={{ marginBottom: 16 }}>← 返回</Button>
+            <div style={{ display: 'flex', gap: 24 }}>
+              <div style={{ minWidth: 140 }}>
+                {templateCategories.map(cat => (
+                  <div key={cat.key} onClick={() => setSelectedCat(cat.key)}
+                    style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', borderRadius: 'var(--radius-xs)',
+                      fontWeight: selectedCat === cat.key ? 500 : 400,
+                      color: selectedCat === cat.key ? 'var(--accent-dark)' : 'var(--ink-muted)',
+                      background: selectedCat === cat.key ? 'var(--accent-light)' : 'transparent',
+                    }}>{cat.label}</div>
+                ))}
+              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {templates.filter(t => selectedCat === 'recommended' || t.category === selectedCat).map(t => (
+                  <div key={t.name} style={{ padding: '16px 20px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'border-color 0.15s' }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</span>
+                      <Badge type="accent">{t.type}</Badge>
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--ink-muted)', lineHeight: 1.5 }}>{t.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <Button variant="ghost" size="sm" onClick={() => setCreateMode(null)} style={{ marginBottom: 16 }}>← 返回</Button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>评估员名称 <span style={{ color: 'var(--error)' }}>*</span></label>
+                <input style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }} placeholder="如：对话连贯性评估" />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>输出类型 <span style={{ color: 'var(--error)' }}>*</span></label>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  {['分数', '对/错', '评价内容'].map(t => (
+                    <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 13 }}>
+                      <input type="radio" name="outputType" style={{ accentColor: 'var(--accent)' }} />
+                      {t}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>评估模型</label>
+                <select style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit', outline: 'none', background: 'var(--bg-card)' }}>
+                  {MODELS.filter(m => m.status === '正常').map(m => <option key={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>评估提示词 <span style={{ color: 'var(--error)' }}>*</span></label>
+                <textarea rows={6} style={{ width: '100%', padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', lineHeight: 1.7, outline: 'none', resize: 'vertical' }}
+                  placeholder="请评估以下多轮对话中模型回复的质量...&#10;&#10;评分标准：&#10;- 10分：完全准确且自然&#10;- 5分：基本准确但有瑕疵&#10;- 0分：完全错误" />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+                <Button variant="secondary" onClick={() => setCreateModal(false)}>取消</Button>
+                <Button>创建评估员</Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Page: Online Debug ──────────────────────────────────────
+
+function PageDebug() {
+  const [result, setResult] = useState(null);
+  return (
+    <div>
+      <PageHeader title="在线调试" subtitle="快速验证单条对话，输入 Query 即时查看意图识别结果" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+        <Card>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 20, fontFamily: 'var(--font-display)' }}>输入</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>提示词版本 <span style={{ color: 'var(--error)' }}>*</span></label>
+              <select style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit', outline: 'none', background: 'var(--bg-card)' }}>
+                <option>请选择要使用的提示词版本</option>
+                {VERSIONS.map(v => <option key={v.id}>{v.id} - {v.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>对话上下文</label>
+              <textarea rows={4} style={{ width: '100%', padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'var(--font-mono)', lineHeight: 1.7, outline: 'none', resize: 'vertical' }}
+                defaultValue="user:帮我打个车&#10;ai:好的，请问您要从哪里出发？" placeholder="多轮对话历史，每行一条" />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>当前对话 <span style={{ color: 'var(--error)' }}>*</span></label>
+              <textarea rows={3} style={{ width: '100%', padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontFamily: 'inherit', lineHeight: 1.7, outline: 'none', resize: 'vertical' }}
+                defaultValue="帮我记一下明天9点开会" placeholder="用户最新一条输入" />
+            </div>
+            <Button size="lg" onClick={() => setResult({ intent: '记忆助手', confidence: 3, reasoning: '用户明确表达了"记一下"的需求，结合"明天 9 点开会"的时间信息，属于典型的记忆/提醒类意图。虽然对话上下文是打车场景，但用户已经切换了话题。' })}>
+              运行调试
+            </Button>
+          </div>
+        </Card>
+
+        <Card style={{ background: result ? 'var(--bg-card)' : 'var(--bg-warm)' }}>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 20, fontFamily: 'var(--font-display)' }}>调试结果</div>
+          {result ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginBottom: 4 }}>识别意图</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent)' }}>{result.intent}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginBottom: 4 }}>置信度</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{result.confidence}</span>
+                    <Badge type="success">高置信度</Badge>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginBottom: 8 }}>推理过程</div>
+                <div style={{ padding: 16, background: 'var(--bg-warm)', borderRadius: 'var(--radius-sm)', fontSize: 13, lineHeight: 1.8 }}>
+                  {result.reasoning}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--ink-light)', fontSize: 13 }}>
+              输入 Query 并点击运行调试查看结果
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─── Page: Visualization ─────────────────────────────────────
+
+function PageVisualization() {
+  const avgRecall = (EVAL_RESULTS.reduce((s, r) => s + r.recall, 0) / EVAL_RESULTS.length * 100).toFixed(1);
+  const avgPrecision = (EVAL_RESULTS.reduce((s, r) => s + r.precision, 0) / EVAL_RESULTS.length * 100).toFixed(1);
+
+  return (
+    <div>
+      <PageHeader title="结果可视化" subtitle="多维度展示评测数据，选择指标进行交叉对比分析" />
+
+      <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+        <StatCard label="平均召回率" value={`${avgRecall}%`} />
+        <StatCard label="平均准确率" value={`${avgPrecision}%`} />
+        <StatCard label="评估意图数" value={EVAL_RESULTS.length} />
+        <StatCard label="总用例数" value="6,262" />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+        <Card>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'var(--font-display)' }}>各意图召回率</span>
+            <select style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-xs)', padding: '4px 10px', fontSize: 12, fontFamily: 'inherit', outline: 'none', background: 'var(--bg-card)' }}>
+              <option>召回率</option>
+              <option>准确率</option>
+              <option>F1 分数</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {EVAL_RESULTS.map(r => {
+              const pct = (r.recall * 100);
+              return (
+                <div key={r.intentId} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 80, fontSize: 12, color: 'var(--ink-muted)', textAlign: 'right', flexShrink: 0 }}>{r.name}</div>
+                  <div style={{ flex: 1, height: 20, background: 'var(--border-light)', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: pct >= 95 ? 'var(--accent)' : pct >= 80 ? 'var(--warning)' : 'var(--error)', borderRadius: 4, transition: 'width 0.5s ease' }} />
+                  </div>
+                  <div style={{ width: 48, fontSize: 12, fontFamily: 'var(--font-mono)', fontWeight: 500, textAlign: 'right', color: pct >= 95 ? 'var(--success)' : pct >= 80 ? 'var(--warning)' : 'var(--error)' }}>{pct.toFixed(1)}%</div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        <Card>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 20, fontFamily: 'var(--font-display)' }}>召回率 vs 准确率 散点分布</div>
+          <svg viewBox="0 0 300 250" style={{ width: '100%' }}>
+            {/* Grid lines */}
+            {[0, 0.25, 0.5, 0.75, 1].map(v => (
+              <Fragment key={v}>
+                <line x1={40} y1={20 + (1-v)*200} x2={290} y2={20 + (1-v)*200} stroke="var(--border-light)" strokeWidth={1} />
+                <text x={35} y={24 + (1-v)*200} fontSize={10} fill="var(--ink-light)" textAnchor="end" fontFamily="var(--font-mono)">{(v*100).toFixed(0)}%</text>
+                <line x1={40 + v*250} y1={20} x2={40 + v*250} y2={220} stroke="var(--border-light)" strokeWidth={1} />
+                <text x={40 + v*250} y={238} fontSize={10} fill="var(--ink-light)" textAnchor="middle" fontFamily="var(--font-mono)">{(v*100).toFixed(0)}%</text>
+              </Fragment>
+            ))}
+            <text x={165} y={250} fontSize={11} fill="var(--ink-muted)" textAnchor="middle">准确率</text>
+            <text x={12} y={120} fontSize={11} fill="var(--ink-muted)" textAnchor="middle" transform="rotate(-90, 12, 120)">召回率</text>
+            {/* Data points */}
+            {EVAL_RESULTS.map(r => {
+              const x = 40 + r.precision * 250;
+              const y = 20 + (1 - r.recall) * 200;
+              const size = Math.max(4, Math.min(10, r.realCount / 200));
+              return (
+                <g key={r.intentId}>
+                  <circle cx={x} cy={y} r={size} fill="var(--accent)" opacity={0.7} />
+                  <title>{r.name}: 召回 {(r.recall*100).toFixed(1)}%, 准确 {(r.precision*100).toFixed(1)}%</title>
+                </g>
+              );
+            })}
+          </svg>
+        </Card>
+      </div>
+
+      <Card>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 20, fontFamily: 'var(--font-display)' }}>评估员评分分布</div>
+        <div style={{ display: 'flex', gap: 20 }}>
+          {[
+            { name: 'PII 泄露检测', pass: 6200, fail: 62, rate: 99.0 },
+            { name: '毒性检测', pass: 6100, fail: 162, rate: 97.4 },
+            { name: '对话连贯性', avg: 8.3, max: 10, min: 2 },
+          ].map(ev => (
+            <div key={ev.name} style={{ flex: 1, padding: 20, background: 'var(--bg-warm)', borderRadius: 'var(--radius-sm)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{ev.name}</div>
+              {ev.rate !== undefined ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <MiniDonut value={ev.rate / 100} />
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{ev.rate}%</div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-muted)' }}>通过率</div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>{ev.avg}</div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginTop: 4 }}>平均分（{ev.min}-{ev.max} 区间）</div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Page: Model Management ──────────────────────────────────
+
+function PageModels() {
+  const [addModal, setAddModal] = useState(false);
+  return (
+    <div>
+      <PageHeader title="模型管理" subtitle="配置项目模型和 API Key，用于对话模拟与评估员调用" actions={<Button onClick={() => setAddModal(true)}>添加模型</Button>} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+        {MODELS.map(m => (
+          <Card key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <span style={{ fontSize: 16, fontWeight: 600 }}>{m.name}</span>
+                <Badge type={m.status === '正常' ? 'success' : 'error'}>{m.status}</Badge>
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--ink-muted)', marginBottom: 4 }}>提供方：{m.provider}</div>
+              <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--ink-light)', marginBottom: 4 }}>API Key:{m.apiKey}</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-light)' }}>最近使用：{m.lastUsed}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button variant="secondary" size="sm">编辑</Button>
+              <Button variant="danger" size="sm">删除</Button>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <Modal title="添加模型" open={addModal} onClose={() => setAddModal(false)}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>模型名称 <span style={{ color: 'var(--error)' }}>*</span></label>
+            <input style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit', outline: 'none' }} placeholder="如：GPT-4o" />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>提供方 <span style={{ color: 'var(--error)' }}>*</span></label>
+            <select style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'inherit', outline: 'none', background: 'var(--bg-card)' }}>
+              <option>OpenAI</option>
+              <option>Anthropic</option>
+              <option>DeepSeek</option>
+              <option>其他</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>API Key <span style={{ color: 'var(--error)' }}>*</span></label>
+            <input type="password" style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'var(--font-mono)', outline: 'none' }} placeholder="sk-..." />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>API Base URL（可选）</label>
+            <input style={{ width: '100%', padding: '10px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontFamily: 'var(--font-mono)', outline: 'none' }} placeholder="https://api.openai.com/v1" />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+            <Button variant="secondary" onClick={() => setAddModal(false)}>取消</Button>
+            <Button>添加模型</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── App Shell ───────────────────────────────────────────────
+
+function App() {
+  const [page, setPage] = useState('dashboard');
+
+  const pages = {
+    dashboard: <PageDashboard onNavigate={setPage} />,
+    intents: <PageIntents />,
+    versions: <PageVersions />,
+    testsets: <PageTestSets />,
+    experiments: <PageExperiments />,
+    results: <PageResults />,
+    evaluators: <PageEvaluators />,
+    debug: <PageDebug />,
+    visualization: <PageVisualization />,
+    models: <PageModels />,
+  };
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      <Sidebar currentPage={page} onNavigate={setPage} />
+      <main style={{ flex: 1, overflow: 'auto', padding: '32px 40px' }}>
+        {pages[page] || <EmptyState text="页面建设中..." />}
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
