@@ -247,6 +247,8 @@ export function Experiments({ onNavigate }: ExperimentsProps) {
     {
       key: 'topic',
       title: '测试主题',
+      width: 140,
+      wrap: true,
       render: (value: string) => <span style={{ fontWeight: 500 }}>{value}</span>,
     },
     {
@@ -259,6 +261,8 @@ export function Experiments({ onNavigate }: ExperimentsProps) {
           options={testSets.map((t) => ({ value: t.id, label: t.name }))}
         />
       ),
+      width: 140,
+      wrap: true,
       render: (value: string) => {
         const ts = testSets.find(t => t.id === value);
         return <span>{ts ? ts.name : value}</span>;

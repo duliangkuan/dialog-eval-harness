@@ -166,6 +166,108 @@ export const MOCK_INTENT_VERSIONS: IntentVersion[] = [
   },
 ];
 
+// 生成测试集CSV内容（与实验评测详情对应的输入数据）
+function generateTestSetCsv(testSetId: string, caseCount: number): string {
+  // 站长外呼场景的基础用例输入
+  const outboundCoreCases = [
+    { context: "ai:你好，请问是张师傅吗？我是站长，看到你已报名飞毛腿。\\nuser:是的，我报了名。", query: "好的，今天高峰期我会上线。", intent: "站长外呼" },
+    { context: "ai:师傅你好，通知一下飞毛腿合同今天生效了。\\nuser:好的收到。\\nai:记得午餐晚餐高峰上线，注意安全。", query: "站长，我今天下午有点事，能晚点上线吗？", intent: "站长外呼" },
+    { context: "ai:你好师傅，飞毛腿合同今天生效了，高峰期需要上线。\\nuser:站长，我今天实在跑不了。", query: "那我明天开始跑行不行？", intent: "站长外呼" },
+    { context: "ai:你好，飞毛腿合同生效了，单日合同需要完成X单。\\nuser:X单有点多啊。\\nai:坚持完成的话后续派单会更好。", query: "那如果差一两单没完成会怎样？", intent: "站长外呼" },
+    { context: "ai:师傅好，多日合同今天开始了，每天至少Y单。\\nuser:每天都要跑吗？", query: "连续跑几天有奖励吗？", intent: "站长外呼" },
+    { context: "ai:你好张师傅，飞毛腿合同生效通知。\\nuser:好。\\nai:高峰期记得上线。", query: "站长，如果我想退出飞毛腿怎么操作？", intent: "站长外呼" },
+    { context: "ai:师傅你好，飞毛腿合同今天生效。\\nuser:站长我在开车。", query: "现在不方便说话。", intent: "站长外呼" },
+    { context: "ai:你好师傅，飞毛腿通知。\\nuser:好的知道了。\\nai:单日合同今天至少X单。", query: "下雨天也要跑吗？", intent: "站长外呼" },
+    { context: "ai:师傅好，飞毛腿合同开始了。\\nuser:站长，这制度不合理。", query: "为什么不能自己选什么时候跑？", intent: "站长外呼" },
+    { context: "ai:你好，请问是李师傅吗？飞毛腿合同今天生效了。\\nuser:是我，什么要求？\\nai:午餐晚餐高峰期需要上线。", query: "明白了，我今天会完成规定单量的。", intent: "站长外呼" },
+    { context: "ai:师傅好，多日合同开始了，连续W天完成Y单有额外奖励。\\nuser:奖励是什么？", query: "比单日合同每单多多少钱？", intent: "站长外呼" },
+    { context: "ai:你好师傅，飞毛腿合同通知。\\nuser:好的。\\nai:记得按时上线。", query: "站长，我手机快没电了，待会充好电就上线。", intent: "站长外呼" },
+    { context: "ai:你好，飞毛腿合同今天开始。\\nuser:知道了。\\nai:高峰期记得上线。\\nuser:好。", query: "对了站长，我换了个电动车，续航更长了。", intent: "站长外呼" },
+    { context: "ai:师傅好，通知你飞毛腿今天开始。\\nuser:嗯好。", query: "站长你觉得今天单量会多吗？", intent: "站长外呼" },
+    { context: "ai:你好张师傅，飞毛腿合同生效了。\\nuser:好的。\\nai:单日合同完成X单。", query: "如果提前完成了是不是就可以下线了？", intent: "站长外呼" },
+  ];
+
+  const outboundConfuseCases = [
+    { context: "ai:你好师傅，飞毛腿合同今天生效了。\\nuser:什么飞毛腿？我没报名啊。", query: "你是不是打错电话了？我是送快递的不是送外卖的。", intent: "站长外呼" },
+    { context: "ai:师傅你好，通知你飞毛腿合同今天开始。\\nuser:站长，我觉得这个制度不合理。", query: "为什么不能让我自己选择什么时候跑？你们是不是在压榨骑手？", intent: "站长外呼" },
+    { context: "ai:你好，飞毛腿合同生效了，今天需要完成X单。\\nuser:站长你能不能帮我多派几个好单？\\nai:飞毛腿是按排名的，不是我能干预的。", query: "那你帮我问问能不能给我涨点配送费呗。", intent: "站长外呼" },
+    { context: "ai:师傅好，多日合同开始了。\\nuser:哎站长，我跟你说个事。\\nai:你说。", query: "我朋友想用我的账号帮我跑几单行不行？", intent: "站长外呼" },
+    { context: "ai:你好师傅，飞毛腿今天开始了。\\nuser:好的。对了站长，上次那个罚款的事…\\nai:那个我向同事确认后再回电给你。", query: "不行，你现在就给我解决，不然我今天不跑了。", intent: "站长外呼" },
+    { context: "ai:师傅好，飞毛腿合同今天生效了。\\nuser:好的收到。", query: "对了站长，能帮我介绍几个兼职骑手吗？我想带人。", intent: "站长外呼" },
+    { context: "ai:你好师傅，飞毛腿通知。\\nuser:站长我想问个别的事。", query: "隔壁那个站点是不是在挖我们的骑手？你知道吗？", intent: "站长外呼" },
+    { context: "ai:张师傅好，飞毛腿合同开始了。\\nuser:好的。\\nai:今天至少完成X单。", query: "站长，能不能把配送范围缩小一点？总是派太远的单。", intent: "站长外呼" },
+    { context: "ai:你好师傅，飞毛腿合同今天生效。\\nuser:嗯。", query: "站长你帮我看看我的账号是不是被限流了？最近单子越来越少。", intent: "站长外呼" },
+    { context: "ai:师傅好，通知飞毛腿合同事项。\\nuser:知道了。\\nai:高峰期上线。", query: "站长，你能加我微信吗？以后有事直接微信说方便。", intent: "站长外呼" },
+  ];
+
+  const outboundBoundaryCases = [
+    { context: "ai:你好师傅，飞毛腿合同今天生效了，高峰期需要上线。\\nuser:今天下午有点事，能晚点上线吗？", query: "那我晚高峰再开始跑，应该能完成单量吧？", intent: "站长外呼" },
+    { context: "ai:师傅你好，通知一下你的飞毛腿今天开始。\\nuser:站长，我今天身体有点不舒服。\\nai:注意身体，但今天合同已生效了。", query: "那我吃个药，下午试试能不能跑。", intent: "站长外呼" },
+    { context: "ai:师傅好，多日合同今天开始，每天需要完成Y单。\\nuser:连续跑这么多天有点累。\\nai:坚持完成W天有额外奖励哦。", query: "要是中间有一天完成不了，能不能补？", intent: "站长外呼" },
+    { context: "ai:你好张师傅，飞毛腿合同生效通知。\\nuser:好的知道了。\\nai:高峰期记得上线。", query: "站长，我想问下如果明天想退出怎么操作？", intent: "站长外呼" },
+    { context: "ai:师傅好，飞毛腿通知。\\nuser:嗯好。\\nai:今天单日合同至少X单。", query: "站长我中午能不能休息一小时再跑？孩子放学要接。", intent: "站长外呼" },
+    { context: "ai:你好师傅，飞毛腿合同开始了。\\nuser:好的。\\nai:注意安全。", query: "站长，电动车刚出了点小问题，修完就上线，大概迟一个小时。", intent: "站长外呼" },
+    { context: "ai:师傅好，飞毛腿合同今天生效。\\nuser:知道了。", query: "站长，今天下暴雨还要跑吗？会不会有安全问题？", intent: "站长外呼" },
+    { context: "ai:你好师傅，飞毛腿通知。\\nuser:好。\\nai:连续完成W天有奖励。", query: "如果某天只差1单没完成，奖励就全没了吗？", intent: "站长外呼" },
+  ];
+
+  const liveCoresCases = [
+    { context: "ai:您好，请问您是贵培训机构的负责人吗？\\nuser:是的，我是。", query: "你们直播产品有什么变化吗？", intent: "直播咨询" },
+    { context: "ai:您好，我们直播产品做了升级，新增了低延迟直播选项。\\nuser:低延迟和标准直播有什么区别？", query: "费用差多少？", intent: "直播咨询" },
+    { context: "ai:您好，通知一下发课页面新增了低延迟直播选项。\\nuser:我知道了。\\nai:您之前选的是标准直播，我们后台已为您走低延迟线路。", query: "那我以后发课直接选低延迟就行了吗？", intent: "直播咨询" },
+    { context: "ai:您好，我们对直播产品做了升级。\\nuser:好的。\\nai:新增了低延迟直播选项，互动体验更好。", query: "我们用的是第三方系统发课，能用吗？", intent: "直播咨询" },
+    { context: "ai:您好，直播产品升级通知。\\nuser:嗯，说吧。\\nai:发课时可以选低延迟直播了。", query: "小班课用低延迟合适吗？", intent: "直播咨询" },
+    { context: "ai:您好负责人，通知直播产品升级。\\nuser:我们目前用Web控制台发课。", query: "低延迟直播选项在哪里？我没看到。", intent: "直播咨询" },
+    { context: "ai:您好，通知直播升级。\\nuser:好的。\\nai:有标准直播和低延迟直播两个选项了。", query: "我能两个都试试吗？", intent: "直播咨询" },
+    { context: "ai:您好负责人，直播升级通知。\\nuser:嗯。\\nai:低延迟直播互动更流畅。", query: "老师那边需要做什么设置吗？", intent: "直播咨询" },
+    { context: "ai:您好，我们直播产品升级了。\\nuser:什么升级？\\nai:新增低延迟直播，延迟只有1-2秒。", query: "学员端体验会有什么变化？", intent: "直播咨询" },
+    { context: "ai:您好负责人，直播产品通知。\\nuser:好的你说。\\nai:发课时可以选低延迟了。", query: "我们有几百个学员同时上课，低延迟扛得住吗？", intent: "直播咨询" },
+    { context: "ai:您好，直播升级通知。\\nuser:嗯了解。\\nai:低延迟直播特别适合互动课。", query: "如果课程中途切换直播模式会断开吗？", intent: "直播咨询" },
+    { context: "ai:您好负责人，通知产品升级。\\nuser:你说。\\nai:新增低延迟直播选项。", query: "能给我们做个培训或者发个操作文档吗？", intent: "直播咨询" },
+    { context: "ai:您好，直播升级通知。\\nuser:好。\\nai:可以选低延迟直播了。\\nuser:费用呢？\\nai:低延迟略高一些。", query: "有没有试用期？先免费试一下再决定。", intent: "直播咨询" },
+  ];
+
+  const liveConfuseCases = [
+    { context: "ai:您好，请问是贵机构的负责人吗？\\nuser:是的。", query: "你们能给我们优惠券吗？", intent: "直播咨询" },
+    { context: "ai:您好，直播升级通知。\\nuser:我不是负责人。", query: "你找错人了吧。", intent: "直播咨询" },
+    { context: "ai:您好负责人，通知直播升级。\\nuser:好的。\\nai:低延迟直播互动更好。", query: "你们平台最近老出bug，能不能先修修再搞新功能？", intent: "直播咨询" },
+    { context: "ai:您好，直播产品升级了。\\nuser:嗯好。\\nai:新增低延迟直播选项。", query: "我想投诉你们的客服，上次打电话态度很差。", intent: "直播咨询" },
+    { context: "ai:您好负责人，直播通知。\\nuser:你说。\\nai:可以选低延迟直播了。", query: "你们能不能给我们定制一个专属的直播界面？", intent: "直播咨询" },
+    { context: "ai:您好，直播升级通知。\\nuser:好。\\nai:低延迟直播适合小班课。", query: "我们想做的不是直播课，是录播课能帮忙吗？", intent: "直播咨询" },
+    { context: "ai:您好负责人，直播产品通知。\\nuser:嗯。", query: "你们竞品XX平台好像更便宜，为什么我要用你们的？", intent: "直播咨询" },
+    { context: "ai:您好，通知直播升级。\\nuser:好的收到。\\nai:新增低延迟选项。", query: "我们的课程视频能不能下载下来保存？版权归谁？", intent: "直播咨询" },
+  ];
+
+  const liveBoundaryCases = [
+    { context: "ai:您好负责人，直播升级通知。\\nuser:我现在很忙。", query: "能不能简单说两句？", intent: "直播咨询" },
+    { context: "ai:您好，通知直播产品升级。\\nuser:好的。\\nai:新增低延迟直播。", query: "我在开车，稍后再聊行吗？", intent: "直播咨询" },
+    { context: "ai:您好负责人，直播升级。\\nuser:嗯好。\\nai:低延迟适合互动课。", query: "我们机构快到期了，续费有优惠吗？得看续费条件再决定用哪个。", intent: "直播咨询" },
+    { context: "ai:您好，直播升级通知。\\nuser:你说。\\nai:有标准和低延迟两个选项。", query: "如果我选了低延迟但网络不好怎么办？会自动降级吗？", intent: "直播咨询" },
+    { context: "ai:您好负责人，直播通知。\\nuser:好。\\nai:低延迟延迟1-2秒。", query: "1-2秒是理论值还是实测值？我们之前遇到过延迟高的情况。", intent: "直播咨询" },
+    { context: "ai:您好，直播产品升级了。\\nuser:了解。\\nai:适合小班课的低延迟选项。", query: "如果中途学员掉线了，重连后还能继续看吗？", intent: "直播咨询" },
+  ];
+
+  let cases: { context: string; query: string; intent: string }[];
+  switch (testSetId) {
+    case "1": cases = outboundCoreCases; break;
+    case "2": cases = outboundConfuseCases; break;
+    case "3": cases = outboundBoundaryCases; break;
+    case "4": cases = liveCoresCases; break;
+    case "5": cases = liveConfuseCases; break;
+    case "6": cases = liveBoundaryCases; break;
+    default: cases = outboundCoreCases;
+  }
+
+  let csv = "dialogue_context,current_query,expected_intent\n";
+  for (let i = 0; i < caseCount; i++) {
+    const base = cases[i % cases.length];
+    const varIdx = Math.floor(i / cases.length);
+    const suffix = varIdx > 0 ? `（变体${varIdx}）` : "";
+    csv += `"${base.context}","${base.query}${suffix}","${base.intent}"\n`;
+  }
+  return csv;
+}
+
 export const MOCK_TEST_SETS: TestSet[] = [
   {
     id: "1",
@@ -175,6 +277,7 @@ export const MOCK_TEST_SETS: TestSet[] = [
     createdAt: "2026-05-10",
     updater: "admin",
     intentId: "1",
+    csvContent: generateTestSetCsv("1", 300),
   },
   {
     id: "2",
@@ -184,6 +287,7 @@ export const MOCK_TEST_SETS: TestSet[] = [
     createdAt: "2026-05-12",
     updater: "system",
     intentId: "1",
+    csvContent: generateTestSetCsv("2", 150),
   },
   {
     id: "3",
@@ -193,6 +297,7 @@ export const MOCK_TEST_SETS: TestSet[] = [
     createdAt: "2026-05-15",
     updater: "system",
     intentId: "1",
+    csvContent: generateTestSetCsv("3", 100),
   },
   {
     id: "4",
@@ -202,6 +307,7 @@ export const MOCK_TEST_SETS: TestSet[] = [
     createdAt: "2026-05-18",
     updater: "admin",
     intentId: "2",
+    csvContent: generateTestSetCsv("4", 250),
   },
   {
     id: "5",
@@ -211,6 +317,7 @@ export const MOCK_TEST_SETS: TestSet[] = [
     createdAt: "2026-05-20",
     updater: "system",
     intentId: "2",
+    csvContent: generateTestSetCsv("5", 100),
   },
   {
     id: "6",
@@ -220,6 +327,7 @@ export const MOCK_TEST_SETS: TestSet[] = [
     createdAt: "2026-05-22",
     updater: "system",
     intentId: "2",
+    csvContent: generateTestSetCsv("6", 50),
   },
 ];
 
@@ -528,56 +636,153 @@ export type ExperimentCaseDetail = {
   passed: boolean;
 };
 
-function generateCaseDetails(experimentId: string, caseCount: number): ExperimentCaseDetail[] {
-  const baseCases: ExperimentCaseDetail[] = [
-    { caseIndex: 1, dialogueContext: "ai:你好，请问是张师傅吗？我是站长，看到你已报名飞毛腿。\nuser:是的，我报了名。", currentQuery: "好的，今天高峰期我会上线。", expectedIntent: "站长外呼", modelResponse: "好的师傅，今天飞毛腿合同已经生效了，午餐和晚餐高峰期记得上线，注意安全。", predictedIntent: "站长外呼", evaluatorName: "意图准确率", evaluatorScore: 10, evaluatorComment: "准确识别站长外呼场景，回复自然流畅", passed: true },
-    { caseIndex: 2, dialogueContext: "ai:您好，请问您是贵培训机构的负责人吗？\nuser:是的，我是。", currentQuery: "你们直播产品有什么变化吗？", expectedIntent: "直播咨询", modelResponse: "我们直播产品升级了，新增了独立的低延迟直播选项，发课时可以选择。", predictedIntent: "直播咨询", evaluatorName: "意图准确率", evaluatorScore: 10, evaluatorComment: "正确识别直播咨询意图", passed: true },
-    { caseIndex: 3, dialogueContext: "ai:师傅你好，通知一下飞毛腿合同今天生效了。\nuser:好的收到。\nai:记得午餐晚餐高峰上线，注意安全。", currentQuery: "站长，我今天下午有点事，能晚点上线吗？", expectedIntent: "站长外呼", modelResponse: "理解的，但今天合同已生效，尽量高峰期上线，哪怕晚高峰也行。", predictedIntent: "站长外呼", evaluatorName: "意图准确率", evaluatorScore: 10, evaluatorComment: "准确识别外呼场景的边界情况", passed: true },
-    { caseIndex: 4, dialogueContext: "ai:您好，我们直播产品做了升级，新增了低延迟直播选项。\nuser:低延迟和标准直播有什么区别？", currentQuery: "费用差多少？", expectedIntent: "直播咨询", modelResponse: "标准直播更便宜，低延迟直播带宽保障更强，费用略高。", predictedIntent: "直播咨询", evaluatorName: "意图准确率", evaluatorScore: 9, evaluatorComment: "正确识别，但回复可以更具体说明价格", passed: true },
-    { caseIndex: 5, dialogueContext: "ai:你好师傅，飞毛腿合同今天生效了，高峰期需要上线。\nuser:站长，我今天实在跑不了。", currentQuery: "那我明天开始跑行不行？", expectedIntent: "站长外呼", modelResponse: "理解的，但今天合同已经生效了，如果今天不跑可能影响后续派单，要不先上线试试？", predictedIntent: "站长外呼", evaluatorName: "对话连贯性", evaluatorScore: 8, evaluatorComment: "回复连贯，挽留话术合理", passed: true },
-    { caseIndex: 6, dialogueContext: "ai:您好，通知一下发课页面新增了低延迟直播选项。\nuser:我知道了。\nai:您之前选的是标准直播，我们后台已为您走低延迟线路。", currentQuery: "那我以后发课直接选低延迟就行了吗？", expectedIntent: "直播咨询", modelResponse: "是的，之后发布页会分开显示两个选项，根据课程类型自行选择即可。", predictedIntent: "直播咨询", evaluatorName: "对话连贯性", evaluatorScore: 9, evaluatorComment: "回复恰当，主动确认操作方式", passed: true },
-    { caseIndex: 7, dialogueContext: "ai:师傅你好，飞毛腿合同今天开始了。\nuser:什么飞毛腿？我没报名啊。", currentQuery: "你是不是打错电话了？", expectedIntent: "站长外呼", modelResponse: "您好，请问是张师傅吗？我这边系统显示您已报名飞毛腿。", predictedIntent: "闲聊", evaluatorName: "意图准确率", evaluatorScore: 3, evaluatorComment: "未能正确识别混淆场景下的外呼意图延续", passed: false },
-    { caseIndex: 8, dialogueContext: "ai:您好，我们对直播产品做了升级。\nuser:好的。\nai:新增了低延迟直播选项，互动体验更好。", currentQuery: "我们用的是第三方系统发课，能用吗？", expectedIntent: "直播咨询", modelResponse: "可以的，第三方系统也支持，进入服务商管理勾选低延迟直播即可。", predictedIntent: "直播咨询", evaluatorName: "意图准确率", evaluatorScore: 10, evaluatorComment: "正确理解上下文", passed: true },
-    { caseIndex: 9, dialogueContext: "ai:你好，飞毛腿合同生效了，单日合同需要完成X单。\nuser:X单有点多啊。\nai:坚持完成的话后续派单会更好。", currentQuery: "那如果差一两单没完成会怎样？", expectedIntent: "站长外呼", modelResponse: "如果没完成规定单量，合同及派单可能会受到影响，建议尽量完成。", predictedIntent: "站长外呼", evaluatorName: "对话连贯性", evaluatorScore: 9, evaluatorComment: "回复恰当，清楚说明后果", passed: true },
-    { caseIndex: 10, dialogueContext: "ai:您好，请问是贵机构的负责人吗？\nuser:是的。", currentQuery: "你们能给我们优惠券吗？", expectedIntent: "直播咨询", modelResponse: "低延迟直播延迟1-2秒，适合小班课。", predictedIntent: "站长外呼", evaluatorName: "意图准确率", evaluatorScore: 2, evaluatorComment: "用户在询问优惠政策，不应归类为站长外呼，且回复答非所问", passed: false },
-    { caseIndex: 11, dialogueContext: "ai:师傅好，多日合同今天开始了，每天至少Y单。\nuser:每天都要跑吗？", currentQuery: "连续跑几天有奖励吗？", expectedIntent: "站长外呼", modelResponse: "连续完成W天多日合同，每天完成Y单，会有额外奖励。", predictedIntent: "站长外呼", evaluatorName: "意图准确率", evaluatorScore: 10, evaluatorComment: "准确识别骑手关于奖励的询问", passed: true },
-    { caseIndex: 12, dialogueContext: "ai:您好，直播产品升级通知。\nuser:嗯，说吧。\nai:发课时可以选低延迟直播了。", currentQuery: "小班课用低延迟合适吗？", expectedIntent: "直播咨询", modelResponse: "非常合适，低延迟直播延迟仅1-2秒，互动更流畅，特别适合小班课和实操课。", predictedIntent: "直播咨询", evaluatorName: "意图准确率", evaluatorScore: 10, evaluatorComment: "回复准确且有针对性", passed: true },
-    { caseIndex: 13, dialogueContext: "ai:你好张师傅，飞毛腿合同生效通知。\nuser:好。\nai:高峰期记得上线。", currentQuery: "站长，如果我想退出飞毛腿怎么操作？", expectedIntent: "站长外呼", modelResponse: "退出飞毛腿需要前一天在App的飞毛腿报名中取消，次日生效。", predictedIntent: "站长外呼", evaluatorName: "对话连贯性", evaluatorScore: 10, evaluatorComment: "准确回答退出流程问题", passed: true },
-    { caseIndex: 14, dialogueContext: "ai:您好负责人，通知直播产品升级。\nuser:我们目前用Web控制台发课。", currentQuery: "低延迟直播选项在哪里？我没看到。", expectedIntent: "直播咨询", modelResponse: "如果控制台还未显示，我帮您后台配置，明天再查看就可以了。", predictedIntent: "直播咨询", evaluatorName: "对话连贯性", evaluatorScore: 9, evaluatorComment: "提供了合理的解决方案", passed: true },
-    { caseIndex: 15, dialogueContext: "ai:师傅你好，飞毛腿合同今天生效。\nuser:站长我在开车。", currentQuery: "现在不方便说话。", expectedIntent: "站长外呼", modelResponse: "那我稍后再打，注意安全。", predictedIntent: "站长外呼", evaluatorName: "意图准确率", evaluatorScore: 10, evaluatorComment: "正确处理骑手忙碌场景", passed: true },
-    { caseIndex: 16, dialogueContext: "ai:您好，直播升级通知。\nuser:我不是负责人。", currentQuery: "你找错人了吧。", expectedIntent: "直播咨询", modelResponse: "好的，麻烦转达一下负责人，我们直播产品做了升级。", predictedIntent: "直播咨询", evaluatorName: "对话连贯性", evaluatorScore: 8, evaluatorComment: "处理非负责人场景合理", passed: true },
-    { caseIndex: 17, dialogueContext: "ai:你好师傅，飞毛腿通知。\nuser:好的知道了。\nai:单日合同今天至少X单。", currentQuery: "下雨天也要跑吗？", expectedIntent: "站长外呼", modelResponse: "恶劣天气也建议上线，订单量更高有助于保住飞毛腿资格，但一定注意安全。", predictedIntent: "站长外呼", evaluatorName: "意图准确率", evaluatorScore: 10, evaluatorComment: "结合知识点准确回答", passed: true },
-    { caseIndex: 18, dialogueContext: "ai:您好，通知直播升级。\nuser:好的。\nai:有标准直播和低延迟直播两个选项了。", currentQuery: "我能两个都试试吗？", expectedIntent: "直播咨询", modelResponse: "可以的，不同课程可以选不同的直播方式，按需使用即可。", predictedIntent: "直播咨询", evaluatorName: "意图准确率", evaluatorScore: 9, evaluatorComment: "回复合理但可更详细", passed: true },
-    { caseIndex: 19, dialogueContext: "ai:师傅好，飞毛腿合同开始了。\nuser:站长，这制度不合理。", currentQuery: "为什么不能自己选什么时候跑？", expectedIntent: "站长外呼", modelResponse: "理解你的感受，飞毛腿报名是按排名进行的，减少拒单和超时有助于保住资格。", predictedIntent: "站长外呼", evaluatorName: "对话连贯性", evaluatorScore: 7, evaluatorComment: "回应了骑手不满但可以更共情", passed: true },
-    { caseIndex: 20, dialogueContext: "ai:您好负责人，直播升级通知。\nuser:嗯。\nai:低延迟直播互动更流畅。", currentQuery: "老师那边需要做什么设置吗？", expectedIntent: "直播咨询", modelResponse: "老师那边不需要额外设置，您发课时选择低延迟直播即可，其他流程不变。", predictedIntent: "直播咨询", evaluatorName: "意图准确率", evaluatorScore: 10, evaluatorComment: "回复清晰实用", passed: true },
-  ];
+// 实验对应测试集映射: experimentId → testSetId
+const EXPERIMENT_TEST_SET_MAP: Record<string, string> = {
+  "933e65d8": "1",
+  "53622fb8": "2",
+  "53622f47": "5",
+};
 
-  const cases: ExperimentCaseDetail[] = [];
+// 站长外呼核心场景的模型回复库
+const outboundCoreResponses = [
+  "好的师傅，今天飞毛腿合同已经生效了，午餐和晚餐高峰期记得上线，注意安全。",
+  "理解的，但今天合同已生效，尽量高峰期上线，哪怕晚高峰也行。",
+  "理解的，但今天合同已经生效了，如果今天不跑可能影响后续派单，要不先上线试试？",
+  "如果没完成规定单量，合同及派单可能会受到影响，建议尽量完成。",
+  "连续完成W天多日合同，每天完成Y单，会有额外奖励。",
+  "退出飞毛腿需要前一天在App的飞毛腿报名中取消，次日生效。",
+  "那我稍后再打，注意安全。",
+  "恶劣天气也建议上线，订单量更高有助于保住飞毛腿资格，但一定注意安全。",
+  "理解你的感受，飞毛腿报名是按排名进行的，减少拒单和超时有助于保住资格。",
+  "好的师傅，今天尽量多跑几单，有奖励拿。",
+  "单日合同和多日合同每单奖励不同，多日坚持更划算。",
+  "好的，充好电就上线，注意安全。",
+  "有什么需要随时联系我，祝跑单顺利。",
+  "今天应该不错，高峰期单量充足。",
+  "提前完成可以下线休息，但高峰期在线派单更多。",
+];
+
+// 站长外呼混淆场景的模型回复库
+const outboundConfuseResponses = [
+  "您好，请问是张师傅吗？我这边系统显示您已报名飞毛腿。",
+  "理解你的感受，但飞毛腿制度是公司统一规定的，我这边也只能通知到位。",
+  "配送费的事我确实不能做主，我向同事确认后再回电给你。",
+  "这个是不行的，账号必须本人使用，代跑会被系统检测到的。",
+  "上次罚款的事我帮你问过了，需要你在App里申诉，我这边处理不了。",
+  "介绍骑手可以让他自己在App报名，我这边只负责通知合同事项。",
+  "隔壁站的事我不太清楚，你先把今天合同任务完成。",
+  "配送范围是系统自动分配的，我没法手动调整。",
+  "限流的事你在App反馈一下，让技术那边查，我这边看不到。",
+  "公事还是电话沟通方便，有问题随时打我电话就行。",
+];
+
+// 直播咨询混淆场景的模型回复库
+const liveConfuseResponses = [
+  "优惠券的话我这边没法承诺，不过低延迟直播的体验提升很明显。",
+  "好的，麻烦转达一下负责人，我们直播产品做了升级。",
+  "bug的问题我帮您记录反馈，今天主要是通知直播升级的事。",
+  "客服态度的问题我帮您反馈，今天主要想通知您直播产品升级了。",
+  "定制界面需要商务那边评估，我先帮您对接，今天先说下升级内容。",
+  "录播课目前也支持，不过今天主要通知的是直播方面的升级。",
+  "我们的优势是低延迟互动体验，具体价格可以让商务给您出方案。",
+  "课程视频的版权和下载权限在后台可以设置，我帮您确认一下。",
+];
+
+function generateCaseDetails(experimentId: string, caseCount: number): ExperimentCaseDetail[] {
+  const testSetId = EXPERIMENT_TEST_SET_MAP[experimentId] || "1";
+
+  // 获取与测试集对应的输入场景
+  type ScenarioInput = { context: string; query: string; intent: string };
+  let scenarioInputs: ScenarioInput[];
+  let modelResponses: string[];
+
+  if (testSetId === "1") {
+    scenarioInputs = [
+      { context: "ai:你好，请问是张师傅吗？我是站长，看到你已报名飞毛腿。\nuser:是的，我报了名。", query: "好的，今天高峰期我会上线。", intent: "站长外呼" },
+      { context: "ai:师傅你好，通知一下飞毛腿合同今天生效了。\nuser:好的收到。\nai:记得午餐晚餐高峰上线，注意安全。", query: "站长，我今天下午有点事，能晚点上线吗？", intent: "站长外呼" },
+      { context: "ai:你好师傅，飞毛腿合同今天生效了，高峰期需要上线。\nuser:站长，我今天实在跑不了。", query: "那我明天开始跑行不行？", intent: "站长外呼" },
+      { context: "ai:你好，飞毛腿合同生效了，单日合同需要完成X单。\nuser:X单有点多啊。\nai:坚持完成的话后续派单会更好。", query: "那如果差一两单没完成会怎样？", intent: "站长外呼" },
+      { context: "ai:师傅好，多日合同今天开始了，每天至少Y单。\nuser:每天都要跑吗？", query: "连续跑几天有奖励吗？", intent: "站长外呼" },
+      { context: "ai:你好张师傅，飞毛腿合同生效通知。\nuser:好。\nai:高峰期记得上线。", query: "站长，如果我想退出飞毛腿怎么操作？", intent: "站长外呼" },
+      { context: "ai:师傅你好，飞毛腿合同今天生效。\nuser:站长我在开车。", query: "现在不方便说话。", intent: "站长外呼" },
+      { context: "ai:你好师傅，飞毛腿通知。\nuser:好的知道了。\nai:单日合同今天至少X单。", query: "下雨天也要跑吗？", intent: "站长外呼" },
+      { context: "ai:师傅好，飞毛腿合同开始了。\nuser:站长，这制度不合理。", query: "为什么不能自己选什么时候跑？", intent: "站长外呼" },
+      { context: "ai:你好，请问是李师傅吗？飞毛腿合同今天生效了。\nuser:是我，什么要求？\nai:午餐晚餐高峰期需要上线。", query: "明白了，我今天会完成规定单量的。", intent: "站长外呼" },
+      { context: "ai:师傅好，多日合同开始了，连续W天完成Y单有额外奖励。\nuser:奖励是什么？", query: "比单日合同每单多多少钱？", intent: "站长外呼" },
+      { context: "ai:你好师傅，飞毛腿合同通知。\nuser:好的。\nai:记得按时上线。", query: "站长，我手机快没电了，待会充好电就上线。", intent: "站长外呼" },
+      { context: "ai:你好，飞毛腿合同今天开始。\nuser:知道了。\nai:高峰期记得上线。\nuser:好。", query: "对了站长，我换了个电动车，续航更长了。", intent: "站长外呼" },
+      { context: "ai:师傅好，通知你飞毛腿今天开始。\nuser:嗯好。", query: "站长你觉得今天单量会多吗？", intent: "站长外呼" },
+      { context: "ai:你好张师傅，飞毛腿合同生效了。\nuser:好的。\nai:单日合同完成X单。", query: "如果提前完成了是不是就可以下线了？", intent: "站长外呼" },
+    ];
+    modelResponses = outboundCoreResponses;
+  } else if (testSetId === "2") {
+    scenarioInputs = [
+      { context: "ai:你好师傅，飞毛腿合同今天生效了。\nuser:什么飞毛腿？我没报名啊。", query: "你是不是打错电话了？我是送快递的不是送外卖的。", intent: "站长外呼" },
+      { context: "ai:师傅你好，通知你飞毛腿合同今天开始。\nuser:站长，我觉得这个制度不合理。", query: "为什么不能让我自己选择什么时候跑？你们是不是在压榨骑手？", intent: "站长外呼" },
+      { context: "ai:你好，飞毛腿合同生效了，今天需要完成X单。\nuser:站长你能不能帮我多派几个好单？\nai:飞毛腿是按排名的，不是我能干预的。", query: "那你帮我问问能不能给我涨点配送费呗。", intent: "站长外呼" },
+      { context: "ai:师傅好，多日合同开始了。\nuser:哎站长，我跟你说个事。\nai:你说。", query: "我朋友想用我的账号帮我跑几单行不行？", intent: "站长外呼" },
+      { context: "ai:你好师傅，飞毛腿今天开始了。\nuser:好的。对了站长，上次那个罚款的事…\nai:那个我向同事确认后再回电给你。", query: "不行，你现在就给我解决，不然我今天不跑了。", intent: "站长外呼" },
+      { context: "ai:师傅好，飞毛腿合同今天生效了。\nuser:好的收到。", query: "对了站长，能帮我介绍几个兼职骑手吗？我想带人。", intent: "站长外呼" },
+      { context: "ai:你好师傅，飞毛腿通知。\nuser:站长我想问个别的事。", query: "隔壁那个站点是不是在挖我们的骑手？你知道吗？", intent: "站长外呼" },
+      { context: "ai:张师傅好，飞毛腿合同开始了。\nuser:好的。\nai:今天至少完成X单。", query: "站长，能不能把配送范围缩小一点？总是派太远的单。", intent: "站长外呼" },
+      { context: "ai:你好师傅，飞毛腿合同今天生效。\nuser:嗯。", query: "站长你帮我看看我的账号是不是被限流了？最近单子越来越少。", intent: "站长外呼" },
+      { context: "ai:师傅好，通知飞毛腿合同事项。\nuser:知道了。\nai:高峰期上线。", query: "站长，你能加我微信吗？以后有事直接微信说方便。", intent: "站长外呼" },
+    ];
+    modelResponses = outboundConfuseResponses;
+  } else {
+    // testSetId === "5" 直播咨询混淆
+    scenarioInputs = [
+      { context: "ai:您好，请问是贵机构的负责人吗？\nuser:是的。", query: "你们能给我们优惠券吗？", intent: "直播咨询" },
+      { context: "ai:您好，直播升级通知。\nuser:我不是负责人。", query: "你找错人了吧。", intent: "直播咨询" },
+      { context: "ai:您好负责人，通知直播升级。\nuser:好的。\nai:低延迟直播互动更好。", query: "你们平台最近老出bug，能不能先修修再搞新功能？", intent: "直播咨询" },
+      { context: "ai:您好，直播产品升级了。\nuser:嗯好。\nai:新增低延迟直播选项。", query: "我想投诉你们的客服，上次打电话态度很差。", intent: "直播咨询" },
+      { context: "ai:您好负责人，直播通知。\nuser:你说。\nai:可以选低延迟直播了。", query: "你们能不能给我们定制一个专属的直播界面？", intent: "直播咨询" },
+      { context: "ai:您好，直播升级通知。\nuser:好。\nai:低延迟直播适合小班课。", query: "我们想做的不是直播课，是录播课能帮忙吗？", intent: "直播咨询" },
+      { context: "ai:您好负责人，直播产品通知。\nuser:嗯。", query: "你们竞品XX平台好像更便宜，为什么我要用你们的？", intent: "直播咨询" },
+      { context: "ai:您好，通知直播升级。\nuser:好的收到。\nai:新增低延迟选项。", query: "我们的课程视频能不能下载下来保存？版权归谁？", intent: "直播咨询" },
+    ];
+    modelResponses = liveConfuseResponses;
+  }
+
   const evaluatorNames = ["意图准确率", "对话连贯性", "约束遵循", "任务完成度"];
   const scoreOptions = [10, 9, 8, 7, 5, 3, 2];
+  const cases: ExperimentCaseDetail[] = [];
 
   for (let i = 0; i < caseCount; i++) {
-    const base = baseCases[i % baseCases.length];
-    if (i < baseCases.length) {
-      cases.push(base);
+    const inputIdx = i % scenarioInputs.length;
+    const input = scenarioInputs[inputIdx];
+    const response = modelResponses[i % modelResponses.length];
+    const seed = i * 7 + 3;
+    const evalName = evaluatorNames[seed % evaluatorNames.length];
+
+    let score: number;
+    let passed: boolean;
+    if (i < scenarioInputs.length) {
+      // 前几条用高质量分数
+      score = i % 5 === 0 ? 8 : (i % 3 === 0 ? 7 : 10);
+      passed = score >= 6;
     } else {
-      // Generate variations
-      const seed = i * 7 + 3;
-      const score = scoreOptions[seed % scoreOptions.length];
-      const passed = score >= 6;
-      const evalName = evaluatorNames[seed % evaluatorNames.length];
-      cases.push({
-        ...base,
-        caseIndex: i + 1,
-        evaluatorName: evalName,
-        evaluatorScore: score,
-        evaluatorComment: passed
-          ? `第${i + 1}条：${evalName}维度评估通过，表现良好。`
-          : `第${i + 1}条：${evalName}维度存在偏差，需改进。`,
-        passed,
-        predictedIntent: passed ? base.expectedIntent : "闲聊",
-      });
+      score = scoreOptions[seed % scoreOptions.length];
+      passed = score >= 6;
     }
+
+    const predictedIntent = passed ? input.intent : "闲聊";
+    const comment = passed
+      ? `第${i + 1}条：${evalName}维度评估通过，表现良好。`
+      : `第${i + 1}条：${evalName}维度存在偏差，需改进。`;
+
+    cases.push({
+      caseIndex: i + 1,
+      dialogueContext: input.context,
+      currentQuery: input.query,
+      expectedIntent: input.intent,
+      modelResponse: response,
+      predictedIntent,
+      evaluatorName: evalName,
+      evaluatorScore: score,
+      evaluatorComment: comment,
+      passed,
+    });
   }
   return cases;
 }

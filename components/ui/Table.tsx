@@ -8,6 +8,8 @@ interface Column<T> {
   align?: 'left' | 'center' | 'right';
   mono?: boolean;
   muted?: boolean;
+  width?: number | string;
+  wrap?: boolean;
   render?: (value: any, row: T) => ReactNode;
 }
 
@@ -33,8 +35,10 @@ export function Table<T>({ columns, data, onRowClick }: TableProps<T>) {
                 fontWeight: 600,
                 color: 'var(--ink-muted)',
                 borderBottom: '2px solid var(--border)',
-                whiteSpace: 'nowrap',
+                whiteSpace: col.wrap ? 'normal' : 'nowrap',
                 letterSpacing: '0.02em',
+                width: col.width,
+                maxWidth: col.width,
               }}
             >
               {col.title}
@@ -67,7 +71,10 @@ export function Table<T>({ columns, data, onRowClick }: TableProps<T>) {
                     fontSize: 13,
                     fontFamily: col.mono ? 'var(--font-mono)' : 'inherit',
                     color: col.muted ? 'var(--ink-muted)' : 'var(--ink)',
-                    whiteSpace: 'nowrap',
+                    whiteSpace: col.wrap ? 'normal' : 'nowrap',
+                    width: col.width,
+                    maxWidth: col.width,
+                    wordBreak: col.wrap ? 'break-word' : undefined,
                   }}
                 >
                   {col.render ? col.render((row as any)[col.key], row) : (row as any)[col.key]}

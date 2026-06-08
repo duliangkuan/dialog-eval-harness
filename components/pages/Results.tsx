@@ -6,7 +6,7 @@ import { useAppContext } from '@/lib/store/AppContext';
 import { MOCK_EXPERIMENT_DETAILS } from '@/lib/store/mock-data';
 
 export function Results() {
-  const { experiments, selectedExperimentId, setSelectedExperimentId, testSets, models, evaluators } = useAppContext();
+  const { experiments, selectedExperimentId, setSelectedExperimentId } = useAppContext();
   const completedExperiments = experiments.filter((e) => e.status === 'completed');
 
   const currentId = selectedExperimentId || (completedExperiments.length > 0 ? completedExperiments[0].id : null);
@@ -102,42 +102,11 @@ export function Results() {
 
       {currentExperiment ? (
         <>
-          {/* Experiment Info */}
-          <div
-            style={{
-              padding: '14px 20px',
-              background: 'var(--accent-light)',
-              borderRadius: 'var(--radius-sm)',
-              marginBottom: 20,
-              display: 'flex',
-              gap: 24,
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              fontSize: 13,
-            }}
-          >
-            <span>
-              <strong>实验：</strong>{currentExperiment.topic}
-            </span>
-            <span>
-              <strong>测试集：</strong>{testSets.find((t) => t.id === currentExperiment.testSetId)?.name || currentExperiment.testSetId}
-            </span>
-            <span>
-              <strong>模型：</strong>{models.find((m) => m.id === currentExperiment.modelId)?.name || currentExperiment.modelId}
-            </span>
-            <span>
-              <strong>评估员：</strong>{currentExperiment.evaluatorIds.map((id) => evaluators.find((e) => e.id === id)?.name || id).join(', ')}
-            </span>
-            <span>
-              <strong>耗时：</strong>{currentExperiment.duration || '-'}
-            </span>
-          </div>
-
           {/* Stats - compact inline */}
           <div style={{
             display: 'flex',
             gap: 24,
-            marginBottom: 20,
+            marginBottom: 16,
             padding: '12px 20px',
             background: 'var(--bg-warm)',
             borderRadius: 'var(--radius-sm)',
@@ -160,37 +129,32 @@ export function Results() {
               平均评分 <strong style={{ fontSize: 18, fontFamily: 'var(--font-mono)', color: 'var(--accent)', marginLeft: 4 }}>{avgScore}</strong>
               <span style={{ fontSize: 12, color: 'var(--ink-muted)', marginLeft: 4 }}>/10</span>
             </span>
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--ink-muted)' }}>
+              显示 {filteredCases.length} / {totalCases} 条
+            </span>
           </div>
 
           {/* Case Detail Table */}
           <Card style={{ padding: 0 }}>
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 15, fontWeight: 600, fontFamily: 'var(--font-display)' }}>
-                逐条评测详情
-              </span>
-              <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
-                显示 {filteredCases.length} / {totalCases} 条
-              </span>
-            </div>
-            <div style={{ overflow: 'visible' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
+            <div style={{ maxHeight: 'calc(100vh - 220px)', overflowY: 'auto', overflowX: 'auto', position: 'relative' }}>
+              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 13 }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr style={{ background: 'var(--bg-warm)' }}>
-                    <th style={thStyle}>#</th>
-                    <th colSpan={3} style={{ ...thStyle, borderBottom: '2px solid var(--accent)', textAlign: 'center', color: 'var(--accent-dark)' }}>
+                    <th style={thStickyStyle}>#</th>
+                    <th colSpan={3} style={{ ...thStickyStyle, boxShadow: 'inset 0 -2px 0 var(--accent)', textAlign: 'center', color: 'var(--accent-dark)' }}>
                       模拟对话内容
                     </th>
-                    <th colSpan={3} style={{ ...thStyle, borderBottom: '2px solid var(--warning)', textAlign: 'center', color: 'var(--warning)' }}>
+                    <th colSpan={3} style={{ ...thStickyStyle, boxShadow: 'inset 0 -2px 0 var(--warning)', textAlign: 'center', color: 'var(--warning)' }}>
                       评估员评估
                     </th>
-                    <th style={thStyle}>结果</th>
+                    <th style={thStickyStyle}>结果</th>
                   </tr>
                   <tr style={{ background: 'var(--bg-warm)' }}>
-                    <th style={thStyle}></th>
-                    <th style={{ ...thStyle, minWidth: 180 }}>对话上下文</th>
-                    <th style={{ ...thStyle, minWidth: 100 }}>用户Query</th>
-                    <th style={{ ...thStyle, minWidth: 180 }}>模型回复</th>
-                    <th style={{ ...thStyle, minWidth: 80 }}>
+                    <th style={thStickyStyle}></th>
+                    <th style={{ ...thStickyStyle, minWidth: 180 }}>对话上下文</th>
+                    <th style={{ ...thStickyStyle, minWidth: 100 }}>用户Query</th>
+                    <th style={{ ...thStickyStyle, minWidth: 180 }}>模型回复</th>
+                    <th style={{ ...thStickyStyle, minWidth: 80 }}>
                       <HeaderFilter
                         label="评估员"
                         value={filterEvaluator}
@@ -198,7 +162,7 @@ export function Results() {
                         options={uniqueEvaluators.map((ev) => ({ value: ev, label: ev }))}
                       />
                     </th>
-                    <th style={thStyle}>
+                    <th style={thStickyStyle}>
                       <HeaderFilter
                         label="评分"
                         value={filterScore}
@@ -206,8 +170,8 @@ export function Results() {
                         options={uniqueScores.map((s) => ({ value: s, label: s }))}
                       />
                     </th>
-                    <th style={{ ...thStyle, minWidth: 160 }}>评估内容</th>
-                    <th style={thStyle}>
+                    <th style={{ ...thStickyStyle, minWidth: 160 }}>评估内容</th>
+                    <th style={thStickyStyle}>
                       <HeaderFilter
                         label="通过"
                         value={filterPassed}
@@ -280,6 +244,11 @@ const thStyle: React.CSSProperties = {
   fontWeight: 600,
   color: 'var(--ink-muted)',
   whiteSpace: 'nowrap',
+};
+
+const thStickyStyle: React.CSSProperties = {
+  ...thStyle,
+  background: 'var(--bg-warm)',
 };
 
 const tdStyle: React.CSSProperties = {
