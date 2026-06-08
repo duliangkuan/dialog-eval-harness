@@ -45,6 +45,7 @@ export function Versions() {
       intentId: '1',
       name: formName.trim(),
       systemPrompt: formPrompt.trim(),
+      constraints: [],
       status: 'draft',
       updatedAt: now,
       updater: 'admin',

@@ -388,7 +388,7 @@ export function Experiments({ onNavigate }: ExperimentsProps) {
           {completionNotice}
         </div>
       )}
-      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)' }}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
         <Table columns={columns} data={filteredExperiments} />
       </div>
 

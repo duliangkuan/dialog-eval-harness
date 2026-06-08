@@ -17,16 +17,28 @@ interface HeaderFilterProps {
 export function HeaderFilter({ label, value, onChange, options }: HeaderFilterProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      if (
+        ref.current && !ref.current.contains(e.target as Node) &&
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  useEffect(() => {
+    if (open && ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 6, left: rect.left });
+    }
+  }, [open]);
 
   const toggle = (val: string) => {
     if (value.includes(val)) {
@@ -45,11 +57,11 @@ export function HeaderFilter({ label, value, onChange, options }: HeaderFilterPr
         onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
         style={{
           cursor: 'pointer',
-          fontSize: 9,
+          fontSize: 12,
           color: hasFilter ? 'var(--accent)' : 'var(--ink-light)',
           userSelect: 'none',
           transition: 'color 0.15s',
-          padding: '2px 4px',
+          padding: '2px 5px',
           borderRadius: 3,
           background: hasFilter ? 'var(--accent-light)' : 'transparent',
         }}
@@ -58,17 +70,18 @@ export function HeaderFilter({ label, value, onChange, options }: HeaderFilterPr
       </span>
       {open && (
         <div
+          ref={dropdownRef}
           onClick={(e) => e.stopPropagation()}
           style={{
-            position: 'absolute',
-            top: 'calc(100% + 6px)',
-            left: 0,
+            position: 'fixed',
+            top: dropdownPos.top,
+            left: dropdownPos.left,
             minWidth: 140,
             background: 'var(--bg-card)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-sm)',
             boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
-            zIndex: 100,
+            zIndex: 1000,
             padding: '6px 0',
             fontSize: 12,
           }}

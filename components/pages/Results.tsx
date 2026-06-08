@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { PageHeader, StatCard, Card, Button, Badge, HeaderFilter } from '../ui';
+import { PageHeader, Card, Button, Badge, HeaderFilter } from '../ui';
 import { useAppContext } from '@/lib/store/AppContext';
 import { MOCK_EXPERIMENT_DETAILS } from '@/lib/store/mock-data';
 
@@ -133,22 +133,33 @@ export function Results() {
             </span>
           </div>
 
-          {/* Stats */}
-          <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-            <StatCard label="总用例" value={totalCases} />
-            <StatCard
-              label="通过"
-              value={passedCases}
-              sub={totalCases > 0 ? `${((passedCases / totalCases) * 100).toFixed(1)}%` : '0%'}
-              trend="up"
-            />
-            <StatCard
-              label="未通过"
-              value={failedCases}
-              sub={totalCases > 0 ? `${((failedCases / totalCases) * 100).toFixed(1)}%` : '0%'}
-              trend="down"
-            />
-            <StatCard label="平均评分" value={avgScore} sub="满分 10" />
+          {/* Stats - compact inline */}
+          <div style={{
+            display: 'flex',
+            gap: 24,
+            marginBottom: 20,
+            padding: '12px 20px',
+            background: 'var(--bg-warm)',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: 14,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}>
+            <span>
+              总用例 <strong style={{ fontSize: 18, fontFamily: 'var(--font-mono)', marginLeft: 4 }}>{totalCases}</strong>
+            </span>
+            <span style={{ color: 'var(--success)' }}>
+              通过 <strong style={{ fontSize: 18, fontFamily: 'var(--font-mono)', marginLeft: 4 }}>{passedCases}</strong>
+              <span style={{ fontSize: 12, marginLeft: 4 }}>({totalCases > 0 ? ((passedCases / totalCases) * 100).toFixed(1) : 0}%)</span>
+            </span>
+            <span style={{ color: 'var(--error)' }}>
+              未通过 <strong style={{ fontSize: 18, fontFamily: 'var(--font-mono)', marginLeft: 4 }}>{failedCases}</strong>
+              <span style={{ fontSize: 12, marginLeft: 4 }}>({totalCases > 0 ? ((failedCases / totalCases) * 100).toFixed(1) : 0}%)</span>
+            </span>
+            <span>
+              平均评分 <strong style={{ fontSize: 18, fontFamily: 'var(--font-mono)', color: 'var(--accent)', marginLeft: 4 }}>{avgScore}</strong>
+              <span style={{ fontSize: 12, color: 'var(--ink-muted)', marginLeft: 4 }}>/10</span>
+            </span>
           </div>
 
           {/* Case Detail Table */}

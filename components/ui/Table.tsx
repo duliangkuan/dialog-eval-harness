@@ -19,7 +19,7 @@ interface TableProps<T> {
 
 export function Table<T>({ columns, data, onRowClick }: TableProps<T>) {
   return (
-    <div style={{ overflow: 'visible', position: 'relative' }}>
+    <div style={{ overflowX: 'auto', position: 'relative' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>

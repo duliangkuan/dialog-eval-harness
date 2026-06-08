@@ -107,6 +107,7 @@ export type Intent = {
   updatedAt: string;
   status: IntentStatus;
   createdAt: string;
+  creator: string;
 };
 
 export type IntentVersion = {
@@ -114,6 +115,7 @@ export type IntentVersion = {
   intentId: string;
   name: string;
   systemPrompt: string;
+  constraints: string[];
   status: "active" | "draft";
   updatedAt: string;
   updater: string;
@@ -147,7 +149,7 @@ export type TestCase = {
 
 export type EvaluatorType = "LLM as a judge" | "规则" | "自定义";
 export type EvaluatorOutputType = "分数" | "对/错" | "评价内容";
-export type EvaluatorCategory = "安全性" | "质量" | "对话" | "自定义";
+export type EvaluatorCategory = "安全性" | "质量" | "对话" | "综合" | "自定义";
 
 export type Evaluator = {
   id: string;
@@ -156,6 +158,7 @@ export type Evaluator = {
   outputType: EvaluatorOutputType;
   category: EvaluatorCategory;
   targetIntentId?: string; // 'all' or specific intent id
+  selectedConstraints?: string[]; // constraints selected for custom evaluator
   builtin: boolean;
   systemPrompt?: string;
   modelId?: string;

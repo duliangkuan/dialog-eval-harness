@@ -1,6 +1,6 @@
 'use client';
 
-import { PageHeader, StatCard, Card, Button } from '../ui';
+import { PageHeader, Card, Button } from '../ui';
 import { useAppContext } from '@/lib/store/AppContext';
 import { Badge } from '../ui/Badge';
 
@@ -19,11 +19,43 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         subtitle="Echo 评测系统运行状态一览"
       />
 
-      <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
-        <StatCard label="总实验次数" value="47" sub="本周 +12" trend="up" />
-        <StatCard label="平均准确率" value="93.4%" sub="较上周 +1.2%" trend="up" />
-        <StatCard label="活跃提示词" value="4" />
-        <StatCard label="测试集" value="4" sub="共 7,212 条用例" />
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 28 }}>
+        {[
+          { label: '发起评测', desc: '选择提示词 + 测试集批量跑', page: 'experiments' },
+          { label: '在线调试', desc: '单条对话快速验证', page: 'debug' },
+          { label: '新建评估员', desc: '自定义评估策略', page: 'evaluators' },
+          { label: '模型管理', desc: '配置 API Key', page: 'models' },
+        ].map((item) => (
+          <div
+            key={item.label}
+            onClick={() => onNavigate(item.page)}
+            style={{
+              flex: 1,
+              minWidth: 180,
+              padding: '16px 20px',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              background: 'var(--bg-card)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent)';
+              e.currentTarget.style.background = 'var(--accent-light)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border)';
+              e.currentTarget.style.background = 'var(--bg-card)';
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+              {item.label}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
+              {item.desc}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 28 }}>
@@ -141,55 +173,6 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         </Card>
       </div>
 
-      <Card>
-        <div
-          style={{
-            fontSize: 15,
-            fontWeight: 600,
-            marginBottom: 16,
-            fontFamily: 'var(--font-display)',
-          }}
-        >
-          快速入口
-        </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {[
-            { label: '发起评测', desc: '选择提示词 + 测试集批量跑', page: 'experiments' },
-            { label: '在线调试', desc: '单条对话快速验证', page: 'debug' },
-            { label: '新建评估员', desc: '自定义评估策略', page: 'evaluators' },
-            { label: '模型管理', desc: '配置 API Key', page: 'models' },
-          ].map((item) => (
-            <div
-              key={item.label}
-              onClick={() => onNavigate(item.page)}
-              style={{
-                flex: 1,
-                minWidth: 180,
-                padding: '16px 20px',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--border)',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--accent)';
-                e.currentTarget.style.background = 'var(--accent-light)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--border)';
-                e.currentTarget.style.background = 'transparent';
-              }}
-            >
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-                {item.label}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>
-                {item.desc}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
     </div>
   );
 }
